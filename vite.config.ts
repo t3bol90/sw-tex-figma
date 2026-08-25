@@ -61,6 +61,11 @@ export default defineConfig(({ mode }) => {
     const uiHtml = readFileSync(resolve(dist, 'ui.html'), 'utf8');
 
     return {
+      // Figma controller runs in a worker-like VM. Prefer packages' worker/default exports,
+      // never the browser conditional exports that may evaluate DOM code at module load.
+      resolve: {
+        conditions: ['worker'],
+      },
       define: {
         __html__: JSON.stringify(uiHtml),
       },

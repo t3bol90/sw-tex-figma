@@ -23,6 +23,7 @@ describe('runtime message guards', () => {
       type: 'RENDER_DOCUMENT',
       source: 'The value is $\\alpha$.',
       settings,
+      workflowToken: 0,
       math: [
         {
           latex: '\\alpha',
@@ -38,13 +39,20 @@ describe('runtime message guards', () => {
 
   it('accepts a no-math render request and rejects inconsistent baseline metrics', () => {
     expect(
-      isUIToPluginMessage({ type: 'RENDER_DOCUMENT', source: 'Plain text', settings, math: [] }),
+      isUIToPluginMessage({
+        type: 'RENDER_DOCUMENT',
+        source: 'Plain text',
+        settings,
+        math: [],
+        workflowToken: 0,
+      }),
     ).toBe(true);
     expect(
       isUIToPluginMessage({
         type: 'RENDER_DOCUMENT',
         source: 'x',
         settings,
+        workflowToken: 0,
         math: [
           {
             latex: 'x',
@@ -55,6 +63,21 @@ describe('runtime message guards', () => {
         ],
       }),
     ).toBe(false);
+  });
+
+  it('requires an exact workflow token for each render request', () => {
+    expect(isUIToPluginMessage({ type: 'RENDER_DOCUMENT', source: 'x', math: [], settings })).toBe(
+      false,
+    );
+    expect(
+      isUIToPluginMessage({
+        type: 'RENDER_DOCUMENT',
+        source: 'x',
+        math: [],
+        settings,
+        workflowToken: 0,
+      }),
+    ).toBe(true);
   });
 
   it('rejects malformed UI messages instead of trusting their discriminant', () => {

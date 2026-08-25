@@ -1,22 +1,36 @@
 import {
-  createSelectionController,
+  captureReplacement,
+  createWorkflowController,
   FigmaRenderOrchestrator,
+  findGeneratedDocumentTarget,
+  firstNativeProseTypography,
+  isGeneratedSceneNode,
   readSelectionSnapshot,
+  replaceWithRenderedDocument,
+  replacementNodeFor,
+  selectedSnapshotNode,
   type FigmaRenderApi,
+  type GeneratedSceneNode,
+  type WorkflowRenderRequest,
+  type WorkflowTarget,
 } from './figma';
-import {
-  isUIToPluginMessage,
-  type PluginToUIMessage,
-  type UIToPluginMessage,
-} from './shared/messages';
+import { readPersistedDocumentState } from './figma/persistence';
+import { isUIToPluginMessage, type PluginToUIMessage, type WorkflowMode } from './shared/messages';
 
 declare const __html__: string;
 const UI_SIZE = { width: 440, height: 560 };
-function postToUi(message: PluginToUIMessage): void {
+const postToUi = (message: PluginToUIMessage): void => {
   figma.ui.postMessage(message);
-}
+};
+const command: WorkflowMode =
+  figma.command === 'edit'
+    ? 'edit'
+    : figma.command === 'reflow'
+      ? 'reflow'
+      : figma.command === 'sync-typography'
+        ? 'sync-typography'
+        : 'create';
 
-// Narrow adapter keeps controller modules mockable and avoids spreading PluginAPI throughout them.
 const renderApi: FigmaRenderApi = {
   loadFontAsync: (font: FontName) => figma.loadFontAsync(font),
   createText: () => figma.createText(),
@@ -31,7 +45,58 @@ const renderApi: FigmaRenderApi = {
   viewport: figma.viewport,
 };
 const renderer = new FigmaRenderOrchestrator(renderApi);
-const controller = createSelectionController({
+const widthOf = (node: GeneratedSceneNode): number | undefined =>
+  typeof node.width === 'number' && Number.isFinite(node.width) ? node.width : undefined;
+const targetForRoot = (node: unknown): WorkflowTarget | undefined => {
+  if (!isGeneratedSceneNode(node)) return undefined;
+  const width = widthOf(node);
+  const state = readPersistedDocumentState(node, width);
+  return state && width ? { node, state, width } : undefined;
+};
+const targetAfterCommit = (root: unknown): WorkflowTarget => {
+  const target = targetForRoot(root);
+  if (!target) throw new Error('Replacement committed without valid v2 persistence.');
+  return target;
+};
+const renderExisting = async (
+  request: WorkflowRenderRequest,
+): Promise<{ readonly rootName: string; readonly nextTarget: WorkflowTarget }> => {
+  const target = request.target;
+  if (!target) throw new Error('No generated document is locked for this workflow.');
+  const current = readPersistedDocumentState(target.node, widthOf(target.node));
+  if (!current || JSON.stringify(current) !== JSON.stringify(target.state))
+    throw new Error('The generated document changed before Apply.');
+  const replacementNode = replacementNodeFor(target.node);
+  const replacement = replacementNode ? captureReplacement(replacementNode) : undefined;
+  if (!replacement) throw new Error('The generated document changed before Apply.');
+  const result = await replaceWithRenderedDocument(renderer, renderApi, request, replacement);
+  return { rootName: result.root.name, nextTarget: targetAfterCommit(result.root) };
+};
+const renderCreate = async (
+  request: WorkflowRenderRequest,
+): Promise<{ readonly rootName: string; readonly consumedSelectedSnapshot?: boolean }> => {
+  const selected = request.selectedSnapshot;
+  const selectedNode = selected ? selectedSnapshotNode(selected) : undefined;
+  if (!selected || !selectedNode) {
+    const result = await renderer.render(request);
+    return { rootName: result.root.name };
+  }
+  const replacementNode = replacementNodeFor(selectedNode);
+  const replacement = replacementNode ? captureReplacement(replacementNode) : undefined;
+  if (
+    !replacement ||
+    selectedNode.characters !== selected.source ||
+    selectedNode.width !== selected.width ||
+    selectedNode.x !== selected.placement.x ||
+    selectedNode.y !== selected.placement.y ||
+    selectedNode.rotation !== selected.placement.rotation
+  )
+    throw new Error('The selected text changed before Apply.');
+  const result = await replaceWithRenderedDocument(renderer, renderApi, request, replacement);
+  return { rootName: result.root.name, consumedSelectedSnapshot: true };
+};
+const controller = createWorkflowController({
+  mode: command,
   readSelection: () =>
     readSelectionSnapshot({
       mixed: figma.mixed,
@@ -40,25 +105,28 @@ const controller = createSelectionController({
       },
       loadFontAsync: (fontName) => figma.loadFontAsync(fontName),
     }),
+  readTarget: async () => {
+    const selection = figma.currentPage.selection.filter(isGeneratedSceneNode);
+    const found = findGeneratedDocumentTarget(selection);
+    return found ? targetForRoot(found.root) : undefined;
+  },
+  readSyncedTypography: async (target) => firstNativeProseTypography(target.node, figma.mixed),
+  currentWidth: (target) => widthOf(target.node),
   postToUi,
   closePlugin: () => figma.closePlugin(),
-  renderDocument: async (request) => {
-    const result = await renderer.render(request);
-    return { rootName: result.root.name };
-  },
+  renderDocument: async (request) =>
+    request.target ? renderExisting(request) : renderCreate(request),
 });
-function handleMessage(message: UIToPluginMessage): void {
-  controller.handleMessage(message);
-}
 figma.showUI(__html__, { ...UI_SIZE, themeColors: true });
 figma.ui.onmessage = (message: unknown) => {
   if (!isUIToPluginMessage(message)) {
     postToUi({ type: 'RENDER_ERROR', message: 'Ignored an invalid message from the plugin UI.' });
     return;
   }
-  handleMessage(message);
+  controller.handleMessage(message);
 };
 figma.on('selectionchange', () => {
   void controller.selectionChanged();
 });
+// The UI repeats REQUEST_INITIALIZATION after subscribing, so an early post cannot be lost.
 void controller.initialize();

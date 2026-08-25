@@ -106,6 +106,7 @@ const renderMessage = (source = '') => ({
       fills: [],
     },
   },
+  workflowToken: 0,
 });
 
 describe('render controller', () => {

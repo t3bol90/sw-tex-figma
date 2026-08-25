@@ -35,6 +35,8 @@ export interface RenderRequest {
   readonly math: readonly RenderedMathPayload[];
   readonly settings: RenderSettings;
   readonly selectedSnapshot?: TextSelectionSnapshot;
+  /** Replacement flows defer selection/reveal until the old node is removed. */
+  readonly finalizeSelection?: boolean;
 }
 export interface RenderResult {
   readonly root: FigmaFrameNode;
@@ -119,9 +121,15 @@ export class FigmaRenderOrchestrator {
         { source: request.source, settings: request.settings, blocks, ...placement },
         (node) => created.push(node),
       );
-      // Selection/reveal happens only after all construction, persistence, and appends succeeded.
-      this.api.viewport.scrollAndZoomIntoView?.([root]);
-      this.api.currentPage.selection = [root] as unknown as readonly unknown[];
+      // Construction has committed. Viewport/selection are deliberately best effort.
+      if (request.finalizeSelection !== false) {
+        try {
+          this.api.viewport.scrollAndZoomIntoView?.([root]);
+          this.api.currentPage.selection = [root] as unknown as readonly unknown[];
+        } catch {
+          /* A completed document must not be reported as failed because reveal failed. */
+        }
+      }
       return { root, placement };
     } catch (error) {
       for (const node of [...created].reverse()) {

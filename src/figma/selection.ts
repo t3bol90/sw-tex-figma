@@ -64,6 +64,12 @@ export type SelectionSnapshotOutcome =
   | { readonly kind: 'non-text-selection'; readonly nodeType: string }
   | { readonly kind: 'invalid-text-selection'; readonly issue: SelectionIssue };
 
+const snapshots = new WeakMap<TextSelectionSnapshot, FigmaSelectedTextNode>();
+/** Controller-only target identity; it is deliberately not enumerable or sent to the iframe. */
+export const selectedSnapshotNode = (
+  snapshot: TextSelectionSnapshot,
+): FigmaSelectedTextNode | undefined => snapshots.get(snapshot);
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
@@ -138,13 +144,12 @@ export async function readSelectionSnapshot(
     };
   }
 
-  return {
-    kind: 'selected',
-    snapshot: {
-      source: node.characters,
-      width: node.width,
-      typography: typographyResult.typography,
-      placement: { x: node.x, y: node.y, rotation: node.rotation },
-    },
+  const snapshot: TextSelectionSnapshot = {
+    source: node.characters,
+    width: node.width,
+    typography: typographyResult.typography,
+    placement: { x: node.x, y: node.y, rotation: node.rotation },
   };
+  snapshots.set(snapshot, node);
+  return { kind: 'selected', snapshot };
 }

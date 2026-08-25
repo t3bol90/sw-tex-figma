@@ -113,7 +113,7 @@ export async function renderDocumentLayers(
     else renderDisplay(api, root, block.plan, contentWidth, top, track);
     top += heights[index]! + (index + 1 < input.blocks.length ? policy.blockGap : 0);
   }
-  persistDocumentState(root, input.source, input.settings);
+  persistDocumentState(root, input.source, input.settings, root.width);
   return root;
 }
 async function renderParagraph(
