@@ -15,7 +15,7 @@ const typography = {
   fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }],
 };
 
-const settings = { width: 480, mathScale: 1, inheritTypography: true };
+const settings = { width: 480, mathScale: 1, inheritTypography: true, typography };
 
 describe('runtime message guards', () => {
   it('accepts complete, bounded render requests', () => {

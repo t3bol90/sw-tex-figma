@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { DEFAULT_TYPOGRAPHY } from '../figma/typography';
 import { formatMathErrorForUi, MathJaxSvgRenderer, renderDocumentMath } from '../math';
 import { parseMarkdown } from '../parser';
 import { isPluginToUIMessage, type PluginToUIMessage } from '../shared/messages';
@@ -8,11 +9,17 @@ import { postToPlugin } from './messages';
 import { SourceEditor } from './SourceEditor';
 
 const INITIAL_SOURCE = String.raw`Write Markdown with inline math such as $\alpha + \beta$.`;
-const DEFAULT_SETTINGS: RenderSettings = { width: 480, mathScale: 1, inheritTypography: true };
+const DEFAULT_SETTINGS: RenderSettings = {
+  width: 480,
+  mathScale: 1,
+  inheritTypography: true,
+  typography: DEFAULT_TYPOGRAPHY,
+};
 
 export function App() {
   const [source, setSource] = useState(INITIAL_SOURCE);
   const [status, setStatus] = useState('Loading selection settings…');
+  const [settings, setSettings] = useState<RenderSettings>(DEFAULT_SETTINGS);
   const [isApplying, setIsApplying] = useState(false);
   const renderer = useRef<MathJaxSvgRenderer | undefined>(undefined);
 
@@ -23,7 +30,7 @@ export function App() {
           ? (event.data as { pluginMessage?: unknown }).pluginMessage
           : undefined;
       if (!isPluginToUIMessage(candidate)) return;
-      handlePluginMessage(candidate, setSource, setStatus);
+      handlePluginMessage(candidate, setSource, setSettings, setStatus);
     };
     window.addEventListener('message', onMessage);
     postToPlugin({ type: 'REQUEST_SELECTION_STYLE' });
@@ -37,8 +44,8 @@ export function App() {
       const document = parseMarkdown(source);
       const engine = renderer.current ?? new MathJaxSvgRenderer();
       renderer.current = engine;
-      const math = await renderDocumentMath(document, DEFAULT_SETTINGS.mathScale, engine);
-      postToPlugin({ type: 'RENDER_DOCUMENT', source, math, settings: DEFAULT_SETTINGS });
+      const math = await renderDocumentMath(document, settings.mathScale, engine);
+      postToPlugin({ type: 'RENDER_DOCUMENT', source, math, settings });
       setStatus(
         math.length === 0
           ? 'Sent document with no math.'
@@ -82,15 +89,21 @@ export function App() {
 function handlePluginMessage(
   message: PluginToUIMessage,
   setSource: (value: string) => void,
+  setSettings: (update: (current: RenderSettings) => RenderSettings) => void,
   setStatus: (value: string) => void,
 ): void {
   switch (message.type) {
     case 'INITIALIZE':
-      if (message.source !== undefined) setSource(message.source);
-      setStatus('Ready. Apply parses and renders all math locally.');
-      return;
     case 'SELECTION_CHANGED':
-      setStatus('Selection settings received.');
+      if (message.source !== undefined) setSource(message.source);
+      if (message.width !== undefined || message.typography !== undefined) {
+        setSettings((current) => ({
+          ...current,
+          ...(message.width === undefined ? {} : { width: message.width }),
+          ...(message.typography === undefined ? {} : { typography: message.typography }),
+        }));
+      }
+      setStatus(message.status ?? 'Ready. Apply parses and renders all math locally.');
       return;
     case 'RENDER_ERROR':
       setStatus(message.message);

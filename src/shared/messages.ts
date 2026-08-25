@@ -16,11 +16,16 @@ export type PluginToUIMessage =
       readonly source?: string;
       readonly typography?: TypographyContext;
       readonly width?: number;
+      /** A non-destructive explanation of the selection/default state. */
+      readonly status?: string;
     }
   | {
       readonly type: 'SELECTION_CHANGED';
+      readonly source?: string;
       readonly typography?: TypographyContext;
       readonly width?: number;
+      /** A non-destructive explanation of the selection/default state. */
+      readonly status?: string;
     }
   | { readonly type: 'RENDER_ERROR'; readonly message: string };
 
@@ -91,7 +96,8 @@ export const isRenderSettings = (value: unknown): value is RenderSettings =>
   isFiniteNumber(value.mathScale) &&
   value.mathScale > 0 &&
   value.mathScale <= 10 &&
-  typeof value.inheritTypography === 'boolean';
+  typeof value.inheritTypography === 'boolean' &&
+  isTypographyContext(value.typography);
 
 const isRenderedMathPayload = (value: unknown): value is RenderedMathPayload =>
   isRecord(value) &&
@@ -138,7 +144,8 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
 
   const hasValidOptionalContext =
     (value.typography === undefined || isTypographyContext(value.typography)) &&
-    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0));
+    (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0)) &&
+    (value.status === undefined || isBoundedString(value.status, 10_000));
 
   switch (value.type) {
     case 'INITIALIZE':
@@ -147,7 +154,10 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
         hasValidOptionalContext
       );
     case 'SELECTION_CHANGED':
-      return hasValidOptionalContext;
+      return (
+        (value.source === undefined || isBoundedString(value.source, 1_000_000)) &&
+        hasValidOptionalContext
+      );
     case 'RENDER_ERROR':
       return isBoundedString(value.message, 10_000);
     default:
