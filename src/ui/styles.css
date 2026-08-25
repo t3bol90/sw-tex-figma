@@ -11,8 +11,7 @@ body {
     sans-serif;
 }
 
-button,
-textarea {
+button {
   font: inherit;
 }
 
@@ -42,15 +41,34 @@ label {
   font-weight: 600;
 }
 
-textarea {
+.source-editor {
   min-height: 260px;
-  width: 100%;
-  resize: vertical;
+  overflow: auto;
   border: 1px solid var(--figma-color-border, #d0d0d0);
   border-radius: 4px;
-  padding: 8px;
   color: inherit;
   background: var(--figma-color-bg-secondary, #f5f5f5);
+}
+
+.source-editor .cm-editor {
+  min-height: 258px;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.source-editor .cm-scroller {
+  overflow: auto;
+}
+
+.source-editor .cm-content {
+  padding: 8px;
+}
+
+.source-editor .cm-editor.cm-focused {
+  outline: none;
 }
 
 .status {
