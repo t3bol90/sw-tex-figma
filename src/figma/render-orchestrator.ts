@@ -49,7 +49,7 @@ export interface RenderResult {
   readonly placement: { readonly x: number; readonly y: number; readonly rotation: number };
 }
 
-/** Safe create-only placement. PR 6 does not replace, remove, or reorder selection. */
+/** Safe create-only placement; replacement owns its separate commit flow. */
 export function resolveCreationPlacement(
   snapshot: TextSelectionSnapshot | undefined,
   viewport: RenderViewport,

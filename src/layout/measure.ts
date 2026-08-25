@@ -67,7 +67,7 @@ export function validateRenderedMathPayloads(
   }
 }
 
-/** Converts PR 3's 16px-em payload into the selected prose coordinate system. */
+/** Converts a normalized 16px-em payload into selected prose coordinates. */
 export function scaleMathPayloadForTypography(rendered: RenderedMathPayload, fontSize: number) {
   validateMathMetrics(rendered);
   if (!Number.isFinite(fontSize) || fontSize <= 0)

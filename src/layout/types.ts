@@ -23,7 +23,7 @@ export type NativeSeparatorAdvanceMeasurer = (
   request: NativeTextMeasurementRequest,
 ) => Promise<number>;
 
-/** Matches PR 4's resolved-font input while avoiding a dependency on Figma modules. */
+/** Host-resolved font input without a dependency on Figma modules. */
 export interface FontResolution {
   readonly fontName: { readonly family: string; readonly style: string };
   readonly marks?: readonly string[];

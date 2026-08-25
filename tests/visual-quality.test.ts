@@ -15,7 +15,7 @@ const typography = {
   fills: [],
 };
 
-describe('PR 8 visual quality contracts', () => {
+describe('visual quality contracts', () => {
   it('keeps MathJax metrics expression-specific while baseline remains ascent', async () => {
     const renderer = new MathJaxSvgRenderer();
     const formulas = [

@@ -2,7 +2,7 @@
   "name": "math-text-figma-plugin",
   "version": "0.1.0",
   "private": true,
-  "description": "A Figma plugin foundation for mixed Markdown and LaTeX text.",
+  "description": "A local-first Figma plugin for mixed Markdown prose and LaTeX mathematics.",
   "packageManager": "pnpm@11.1.3",
   "scripts": {
     "dev": "pnpm run build --watch",

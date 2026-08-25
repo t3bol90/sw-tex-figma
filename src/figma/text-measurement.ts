@@ -122,8 +122,8 @@ export class BoundedTextMeasurementCache<T> {
  * Contract: width and height are the temporary native TextNode's bounds after
  * the supplied font, size, line height, letter spacing, fills, and characters
  * are set. Figma exposes no prose baseline/ascent/descent here; this function
- * intentionally returns no invented baseline metric. PR 5 owns any explicit
- * baseline calibration/compositor policy.
+ * intentionally returns no invented baseline metric. Baseline calibration and
+ * compositor policy are separate explicit contracts.
  */
 export async function measureTextWithFigma(
   api: FigmaTextMeasurementApi,

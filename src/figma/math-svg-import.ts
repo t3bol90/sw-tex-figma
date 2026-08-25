@@ -51,7 +51,7 @@ export function importMathSvg(
     !close(node.height, expectedHeight)
   )
     throw new Error('Figma SVG dimensions do not match the normalized math metrics.');
-  // This is deliberately the only resize. mathScale was baked into the SVG by PR 3.
+  // This is deliberately the only resize. mathScale is already baked into the SVG.
   node.resize(plan.metrics.width, plan.metrics.height);
   if (!valid(node.width) || !valid(node.height))
     throw new Error('Figma resized SVG to invalid dimensions.');

@@ -3,9 +3,9 @@ import type { TypographyContext } from '../shared/types';
 import type { LayoutMetrics, NativeTextMetrics, ProseBaselineCalibration } from './types';
 
 /**
- * This is an estimate, not a Figma-measured baseline. PR 4 exposes only text
- * bounds. The default assumes a 0.8em ascent and distributes line-box leading
- * equally above and below that em. Replace it with visual calibration later.
+ * This is an estimate, not a Figma-measured baseline. Native measurement exposes
+ * only text bounds. The default assumes a 0.8em ascent and distributes line-box
+ * leading equally above and below that em. A reference-glyph calibration can replace it.
  */
 export const DEFAULT_PROSE_BASELINE_CALIBRATION: ProseBaselineCalibration = {
   emAscentRatio: 0.8,

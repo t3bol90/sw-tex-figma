@@ -15,4 +15,4 @@ pnpm build
 
 In Figma, use **Plugins → Development → Import plugin from manifest…** and select this repository's `manifest.json`. Figma issues and maintains the plugin ID; retain that ID when rebuilding or sharing a local development copy. Reload the plugin after each build.
 
-The controller cannot use DOM, canvas, browser font measurement, or `TextEncoder`. Native text measurements, final-width reconciliation, and optional reference-glyph baseline probes run only through typed Figma APIs. See `visual-qa-fixture.md` for manual release checks and calibrated-baseline limits.
+The controller cannot use DOM, canvas, browser font measurement, or `TextEncoder`. Native text measurements, final-width reconciliation, and optional reference-glyph baseline probes run only through typed Figma APIs. Live Figma checks remain necessary because mocked APIs cannot fully reproduce native font geometry and SVG import behavior.

@@ -1,6 +1,6 @@
 # Paragraph compositor contract
 
-`src/layout` is renderer-independent. It takes the application AST, PR 3
+`src/layout` is renderer-independent. It takes the application AST,
 `RenderedMathPayload` objects, and an injected async native text measurement
 function. It does not create Figma nodes and does not import Figma, React, DOM,
 canvas, remark, or MathJax engine APIs.
@@ -47,7 +47,8 @@ The tolerance can be configured only to absorb floating-point noise.
 
 ## Vertical calibration and typography-coupled math size
 
-PR 4 returns only native prose width/height. `DEFAULT_PROSE_BASELINE_CALIBRATION`
+Native Figma text measurement returns only prose width/height.
+`DEFAULT_PROSE_BASELINE_CALIBRATION`
 is expressly an estimate, not a Figma-measured ascent/descent. Its 0.8em ascent
 ratio uses `emHeight = min(measuredHeight, fontSize)`,
 `leading = max(0, measuredHeight - fontSize)`, and:
@@ -61,7 +62,7 @@ The ratio is validated to be strictly between zero and one and can be replaced
 by future visual calibration. Empty forced lines use configured line height, or
 `1.2 * fontSize` for AUTO, through the same estimate.
 
-PR 3 payload metrics and normalized SVG dimensions are already in a 16px-em
+Math payload metrics and normalized SVG dimensions are already in a 16px-em
 coordinate system at the fixed current `mathScale: 1`. The compositor converts once
 to selected prose coordinates with `svgScale = typography.fontSize / 16`:
 
@@ -70,8 +71,8 @@ layoutMathMetric = payload.metrics * svgScale
 importedSvgScale = svgScale
 ```
 
-PR 6 must import the PR 3 SVG at `importedSvgScale`; it must not apply
-an additional scale again. Line ascent/descent are maxima of child values; each child
+The renderer imports the normalized SVG at `importedSvgScale`; it must not
+apply an additional scale again. Line ascent/descent are maxima of child values; each child
 uses `y = lineTop + lineAscent - child.ascent`.
 
 ## Merge / kerning contract
@@ -94,13 +95,11 @@ native TextNode and advances later siblings from its actual Figma width, so
 kerning and letter spacing cannot create a gap or overlap. This reconciliation
 never changes the selected break, source order, or math/mark boundaries.
 
-
-## PR 8 final-node reconciliation
+## Final-node reconciliation
 
 Break decisions still use Figma measurements of tokenizer fragments, so a render cannot silently reflow source order. After each compatible merged prose segment is created, the renderer uses that final native `TextNode.width` (including Figma kerning and letter spacing) as the line cursor advance. Every later math/prose child on that line is positioned from that actual cursor. The Line, Paragraph, and root frame widths are then resized from actual child extents and persisted as `compiledWidth`; transparent frames never clip overflow.
 
 Vertical placement uses each exact MathJax ascent and a typography-keyed reference-glyph calibration for prose. The final native text height is recalibrated before a line's max ascent/descent is taken. This changes later line coordinates only through their actual preceding line height, never through a fixed centering offset.
-
 
 ## MathJax fragment normalization
 
