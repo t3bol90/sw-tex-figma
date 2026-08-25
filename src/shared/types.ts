@@ -38,6 +38,8 @@ export interface RenderSettings {
   readonly width: number;
   readonly mathScale: number;
   readonly inheritTypography: boolean;
+  /** Typography selected by the user or the safe create-flow default. */
+  readonly typography: TypographyContext;
 }
 
 export interface MathMetrics {
