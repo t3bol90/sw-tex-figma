@@ -16,6 +16,11 @@ import {
   type RenderBlock,
   type FigmaFrameNode,
 } from './document-renderer';
+import {
+  FigmaProseBaselineCalibrator,
+  type FigmaBaselineProbeTextNode,
+  type FigmaBaselineProbeVectorNode,
+} from './baseline-calibration';
 import { FigmaTextMeasurer } from './text-measurement';
 
 export interface RenderViewport {
@@ -26,6 +31,7 @@ export interface FigmaRenderApi extends FigmaDocumentRendererApi {
   listAvailableFontsAsync(): Promise<
     readonly { readonly family: string; readonly style: string }[]
   >;
+  flatten?(nodes: readonly FigmaBaselineProbeTextNode[]): FigmaBaselineProbeVectorNode;
   readonly currentPage: { selection: readonly unknown[] | unknown[] };
   readonly viewport: RenderViewport;
 }
@@ -68,9 +74,19 @@ export function resolveCreationPlacement(
 export class FigmaRenderOrchestrator {
   private readonly measurer: FigmaTextMeasurer;
   private readonly fonts: FigmaFontResolver;
+  private readonly baselines: FigmaProseBaselineCalibrator;
   public constructor(private readonly api: FigmaRenderApi) {
     this.measurer = new FigmaTextMeasurer(api);
     this.fonts = new FigmaFontResolver(api);
+    const probe =
+      typeof api.flatten === 'function'
+        ? {
+            loadFontAsync: api.loadFontAsync.bind(api),
+            createText: api.createText.bind(api),
+            flatten: api.flatten.bind(api),
+          }
+        : undefined;
+    this.baselines = new FigmaProseBaselineCalibrator(probe);
   }
   public async render(request: RenderRequest): Promise<RenderResult> {
     validateRenderedMathPayloads(request.document, request.math);
@@ -88,12 +104,29 @@ export class FigmaRenderOrchestrator {
                 await this.fonts.resolve(child.marks, request.settings.typography),
               );
           }
+    const baseCalibration = await this.baselines.calibrate(request.settings.typography);
     const measured = await measureDocument(request.document, {
       typography: request.settings.typography,
       renderedMath: request.math,
       fontResolver: (marks) => resolutions.get(keyFor(marks)),
+      baselineCalibration: baseCalibration,
+      baselineCalibrationProvider: async (typography, resolution) =>
+        this.baselines.calibrate(typography, resolution?.fontName),
       measureText: async (input) =>
         this.measurer.measure({
+          text: input.text,
+          typography: input.typography,
+          ...(input.fontResolution === undefined
+            ? {}
+            : {
+                fontResolution: {
+                  fontName: input.fontResolution.fontName,
+                  marks: input.fontResolution.marks,
+                },
+              }),
+        }),
+      measureSeparatorAdvance: async (input) =>
+        this.measurer.measureOrdinarySpaceAdvance({
           text: input.text,
           typography: input.typography,
           ...(input.fontResolution === undefined
@@ -118,7 +151,13 @@ export class FigmaRenderOrchestrator {
     try {
       const root = await renderDocumentLayers(
         this.api,
-        { source: request.source, settings: request.settings, blocks, ...placement },
+        {
+          source: request.source,
+          settings: request.settings,
+          blocks,
+          baselineCalibration: baseCalibration,
+          ...placement,
+        },
         (node) => created.push(node),
       );
       // Construction has committed. Viewport/selection are deliberately best effort.
@@ -154,6 +193,7 @@ const toRenderBlocks = (
           plan: composeMeasuredParagraph(block.measured, {
             width: settings.width,
             typography: settings.typography,
+            textAlignment: settings.textAlignment,
           }),
         }
       : { type: 'display-math', plan: block },

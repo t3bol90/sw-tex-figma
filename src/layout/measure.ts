@@ -115,9 +115,36 @@ export async function measureParagraph(
       ...(token.marks === undefined ? {} : { marks: token.marks }),
       ...(fontResolution === undefined ? {} : { fontResolution }),
     });
+    const tokenCalibration = options.baselineCalibrationProvider
+      ? await options.baselineCalibrationProvider(options.typography, fontResolution)
+      : calibration;
+    const calibrated = calibrateProseMetrics(native, options.typography, tokenCalibration);
+    // Figma can report zero ink width for terminal ordinary spaces. For U+0020
+    // only, use a host probe that preserves its advance. The probe is per-space
+    // and replaces (rather than adds to) the native separator width, so letter
+    // spacing is applied once. Tabs/other breakable whitespace retain native
+    // measurement; NBSP is prose content and never reaches this branch.
+    const ordinarySpaces =
+      token.kind === 'separator'
+        ? [...token.text].filter((character) => character === ' ').length
+        : 0;
+    const separatorAdvance =
+      ordinarySpaces && options.measureSeparatorAdvance
+        ? await options.measureSeparatorAdvance({
+            text: token.text,
+            typography: options.typography,
+            ...(token.marks === undefined ? {} : { marks: token.marks }),
+            ...(fontResolution === undefined ? {} : { fontResolution }),
+          })
+        : undefined;
+    const width =
+      separatorAdvance === undefined
+        ? calibrated.width
+        : Math.max(calibrated.width, ordinarySpaces * separatorAdvance);
     tokens.push({
       ...token,
-      metrics: calibrateProseMetrics(native, options.typography, calibration),
+      metrics: { ...calibrated, width },
+      baselineCalibration: tokenCalibration,
       ...(fontResolution === undefined ? {} : { fontResolution }),
     });
   }

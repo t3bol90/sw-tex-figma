@@ -98,6 +98,7 @@ const renderMessage = (source = '') => ({
     width: 100,
     mathScale: 1,
     inheritTypography: true,
+    textAlignment: 'left' as const,
     typography: {
       fontName: { family: 'Inter', style: 'Regular' },
       fontSize: 16,

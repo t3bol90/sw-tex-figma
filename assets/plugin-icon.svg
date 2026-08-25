@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Math Text plugin icon</title>
+  <desc id="desc">A geometric white T beside a mint summation mark on an indigo rounded square.</desc>
+  <defs>
+    <linearGradient id="bg" x1="128" y1="64" x2="896" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#635BFF"/>
+      <stop offset="0.52" stop-color="#5145E5"/>
+      <stop offset="1" stop-color="#3426A9"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(792 210) rotate(132) scale(610)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9D93FF" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#9D93FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="100" y="150" width="790" height="710" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="24" flood-color="#17105E" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#bg)"/>
+  <rect x="32" y="32" width="960" height="960" rx="224" fill="url(#glow)"/>
+  <rect x="54" y="54" width="916" height="916" rx="202" fill="none" stroke="#FFFFFF" stroke-opacity="0.13" stroke-width="4"/>
+  <g filter="url(#shadow)">
+    <path d="M174 226C174 204 192 186 214 186H492C514 186 532 204 532 226V274C532 296 514 314 492 314H420V754C420 780 399 801 373 801H333C307 801 286 780 286 754V314H214C192 314 174 296 174 274V226Z" fill="#FFFFFF"/>
+    <path d="M820 232C842 232 860 250 860 272V292C860 314 842 332 820 332H663L767 493C781 514 781 541 768 562L662 730H826C848 730 866 748 866 770V790C866 812 848 830 826 830H574C541 830 522 793 540 765L684 534L541 306C523 278 543 232 576 232H820Z" fill="#7EF5D1"/>
+  </g>
+  <rect x="170" y="858" width="696" height="24" rx="12" fill="#FFFFFF" fill-opacity="0.3"/>
+</svg>

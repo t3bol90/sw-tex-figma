@@ -19,9 +19,18 @@ export function composeParagraph(
   const broken = breakMeasuredTokens(paragraph.tokens, options);
   let top = 0;
   const lines: LinePlan[] = [];
-  for (const line of broken) {
+  for (let index = 0; index < broken.length; index += 1) {
+    const line = broken[index]!;
     const metrics = lineMetrics(line.tokens, options.emptyLineMetrics);
-    const children = mergeAndPlace(line.tokens, metrics.ascent, top);
+    // Only soft-wrapped, non-terminal lines can justify. A hard break marks the
+    // line it terminates, so it remains natural even when another line follows.
+    const justified =
+      options.textAlignment === 'justify' &&
+      index + 1 < broken.length &&
+      !line.forced &&
+      metrics.width < options.width &&
+      line.tokens.some((token) => token.kind === 'separator');
+    const children = mergeAndPlace(line.tokens, metrics.ascent, top, justified);
     const plan: LinePlan = {
       x: 0,
       y: top,
@@ -32,6 +41,7 @@ export function composeParagraph(
       baseline: top + metrics.ascent,
       children,
       forced: line.forced,
+      ...(justified ? { justified: true as const } : {}),
     };
     lines.push(plan);
     top += metrics.height;
@@ -51,6 +61,7 @@ export function composeMeasuredParagraph(
   return composeParagraph(paragraph, {
     width: options.width,
     tolerance: options.tolerance,
+    textAlignment: options.textAlignment,
     emptyLineMetrics:
       options.emptyLineMetrics ??
       fallbackEmptyLineMetrics(options.typography, options.baselineCalibration),
@@ -76,6 +87,7 @@ const mergeAndPlace = (
   tokens: readonly MeasuredInlineToken[],
   lineAscent: number,
   top: number,
+  justify: boolean,
 ): readonly LineChild[] => {
   const children: LineChild[] = [];
   let x = 0;
@@ -97,7 +109,7 @@ const mergeAndPlace = (
     const previous = children.at(-1);
     if (token.kind === 'prose' || token.kind === 'separator') {
       if (previous?.type === 'prose' && proseCompatible(previous, token)) {
-        children[children.length - 1] = mergeProse(previous, token);
+        children[children.length - 1] = mergeProse(previous, token, justify);
       } else {
         children.push({
           type: 'prose',
@@ -107,6 +119,16 @@ const mergeAndPlace = (
           x,
           y: top + lineAscent - token.metrics.ascent,
           metrics: token.metrics,
+          ...(token.baselineCalibration === undefined
+            ? {}
+            : { baselineCalibration: token.baselineCalibration }),
+          ...(token.kind === 'separator'
+            ? {
+                endsWithSeparator: true as const,
+                trailingSeparatorWidth: token.metrics.width,
+                ...(justify ? { justifyGapAfter: true as const } : {}),
+              }
+            : {}),
           measuredParts: [token.text],
         });
       }
@@ -120,13 +142,16 @@ const proseCompatible = (
   previous: ProseLineChild,
   token: Extract<MeasuredInlineToken, { readonly kind: 'prose' | 'separator' }>,
 ): boolean =>
+  previous.justifyGapAfter !== true &&
   sameMarks(previous.marks, token.marks) &&
   sameFontResolution(previous.fontResolution, token.fontResolution) &&
-  sameVerticalMetrics(previous.metrics, token.metrics);
+  sameVerticalMetrics(previous.metrics, token.metrics) &&
+  sameCalibration(previous.baselineCalibration, token.baselineCalibration);
 
 const mergeProse = (
   previous: ProseLineChild,
   token: Extract<MeasuredInlineToken, { readonly kind: 'prose' | 'separator' }>,
+  justify: boolean,
 ): ProseLineChild => ({
   ...previous,
   text: previous.text + token.text,
@@ -137,6 +162,16 @@ const mergeProse = (
     ascent: previous.metrics.ascent,
     descent: previous.metrics.descent,
   },
+  ...(token.kind === 'separator'
+    ? {
+        endsWithSeparator: true as const,
+        trailingSeparatorWidth: token.metrics.width,
+        ...(justify ? { justifyGapAfter: true as const } : {}),
+      }
+    : {}),
+  ...(token.kind === 'prose'
+    ? { endsWithSeparator: undefined, trailingSeparatorWidth: undefined }
+    : {}),
   measuredParts: [...previous.measuredParts, token.text],
 });
 
@@ -156,4 +191,12 @@ const sameVerticalMetrics = (left: LayoutMetrics, right: LayoutMetrics): boolean
 const sameFontResolution = (
   left: ProseLineChild['fontResolution'],
   right: Extract<MeasuredInlineToken, { readonly kind: 'prose' | 'separator' }>['fontResolution'],
+): boolean => JSON.stringify(left) === JSON.stringify(right);
+
+const sameCalibration = (
+  left: ProseLineChild['baselineCalibration'],
+  right: Extract<
+    MeasuredInlineToken,
+    { readonly kind: 'prose' | 'separator' }
+  >['baselineCalibration'],
 ): boolean => JSON.stringify(left) === JSON.stringify(right);

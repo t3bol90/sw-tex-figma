@@ -159,6 +159,80 @@ describe('paragraph tokenization and breaks', () => {
   });
 });
 
+describe('ordinary-space advance probes', () => {
+  const payload = math('x', 10);
+  const zeroSpaceMeasure = async ({ text, fontResolution }: NativeTextMeasurementRequest) => ({
+    width: text.includes(' ') ? 0 : [...text].length * 6,
+    height: 20,
+    ...(fontResolution ? {} : {}),
+  });
+  it('uses a font-derived probe for terminal ordinary spaces, but not absent spaces or NBSP', async () => {
+    const advanceCalls: NativeTextMeasurementRequest[] = [];
+    const options = (children: ParagraphNode['children']) =>
+      measureParagraph(paragraph(children), {
+        typography,
+        measureText: zeroSpaceMeasure,
+        renderedMath: [payload],
+        measureSeparatorAdvance: async (request) => {
+          advanceCalls.push(request);
+          return request.fontResolution?.fontName.style === 'Bold' ? 5 : 4;
+        },
+      });
+    const spaced = composeMeasuredParagraph(
+      await options([
+        { type: 'text', value: 'as ' },
+        { type: 'math', latex: 'x', display: false },
+      ]),
+      { typography, width: 100 },
+    );
+    expect(spaced.lines[0]!.children.map((child) => [child.type, child.x])).toEqual([
+      ['prose', 0],
+      ['math', 16],
+    ]);
+    expect(spaced.lines[0]!.children[0]).toMatchObject({ text: 'as ', trailingSeparatorWidth: 4 });
+    const unspaced = composeMeasuredParagraph(
+      await options([
+        { type: 'text', value: 'as' },
+        { type: 'math', latex: 'x', display: false },
+      ]),
+      { typography, width: 100 },
+    );
+    expect(unspaced.lines[0]!.children.map((child) => child.x)).toEqual([0, 12]);
+    const doubled = composeMeasuredParagraph(
+      await options([
+        { type: 'text', value: 'as  ' },
+        { type: 'math', latex: 'x', display: false },
+      ]),
+      { typography, width: 100 },
+    );
+    expect(doubled.lines[0]!.children.at(-1)?.x).toBe(20);
+    const nbsp = composeMeasuredParagraph(
+      await options([
+        { type: 'text', value: 'as\u00a0' },
+        { type: 'math', latex: 'x', display: false },
+      ]),
+      { typography, width: 100 },
+    );
+    expect(nbsp.lines[0]!.children.at(-1)?.x).toBe(18);
+    expect(advanceCalls).toHaveLength(2); // one and two U+0020 runs only
+  });
+  it('uses a marked effective font for its space probe', async () => {
+    const plan = await measureParagraph(
+      paragraph([{ type: 'text', value: 'a ', marks: ['bold'] }]),
+      {
+        typography,
+        measureText: zeroSpaceMeasure,
+        renderedMath: [],
+        fontResolver: () => ({ fontName: { family: 'Inter', style: 'Bold' } }),
+        measureSeparatorAdvance: async (request) =>
+          request.fontResolution?.fontName.style === 'Bold' ? 5 : 4,
+      },
+    );
+    const separator = plan.tokens.at(-1);
+    expect(separator?.kind === 'separator' && separator.metrics.width).toBe(5);
+  });
+});
+
 describe('paragraph plans', () => {
   it('aligns prose and fraction-like math on one baseline and uses empty fallback metrics', async () => {
     const plan = compose(
@@ -308,5 +382,60 @@ describe('math occurrence validation and async document measurement', () => {
       type: 'paragraph',
       measured: { paragraph: { children: [{ value: 'after' }] } },
     });
+  });
+});
+
+describe('justified paragraph planning', () => {
+  const justify = (value: Awaited<ReturnType<typeof measured>>, width: number) =>
+    composeMeasuredParagraph(value, { typography, width, textAlignment: 'justify' });
+
+  it('marks every retained source gap, including one next to inline math, for equal distribution', async () => {
+    const wider = justify(
+      await measured(
+        [
+          { type: 'text', value: 'a ' },
+          { type: 'text', value: 'b ', marks: ['bold'] },
+          { type: 'math', latex: 'x', display: false },
+          { type: 'text', value: ' c d e', marks: ['italic'] },
+        ],
+        [math('x', 10)],
+      ),
+      75,
+    );
+    expect(wider.lines[0]).toMatchObject({ justified: true });
+    expect(
+      wider.lines[0]!.children.flatMap((child) =>
+        child.type === 'prose' && child.justifyGapAfter ? [child.text] : [],
+      ),
+    ).toEqual(['a ', 'b ', ' ']);
+    expect(wider.lines[0]!.children).toContainEqual(
+      expect.objectContaining({
+        type: 'prose',
+        text: 'b ',
+        marks: ['bold'],
+        justifyGapAfter: true,
+      }),
+    );
+  });
+
+  it('excludes terminal, hard-break, blank, no-space, and over-wide lines', async () => {
+    const terminal = justify(await measured([{ type: 'text', value: 'a b' }]), 100);
+    expect(terminal.lines[0]!.justified).toBeUndefined();
+    const hard = justify(
+      await measured([
+        { type: 'text', value: 'a b' },
+        { type: 'break' },
+        { type: 'text', value: 'c d' },
+      ]),
+      100,
+    );
+    expect(hard.lines.map((line) => line.justified)).toEqual([undefined, undefined]);
+    const blank = justify(await measured([{ type: 'break' }, { type: 'text', value: 'x' }]), 100);
+    expect(blank.lines[0]!.justified).toBeUndefined();
+    const noSpace = justify(await measured([{ type: 'text', value: 'abcdefghij kl' }]), 50);
+    expect(noSpace.lines[0]!.justified).toBeUndefined();
+    const overWide = justify(await measured([{ type: 'text', value: 'abcdefghij kl mn' }]), 50);
+    expect(overWide.lines[0]!.width).toBeGreaterThan(50);
+    expect(overWide.lines[0]!.justified).toBeUndefined();
   });
 });

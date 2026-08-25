@@ -6,6 +6,8 @@ import {
   formatMathErrorForUi,
   MathJaxSvgRenderer,
   MathRenderError,
+  layoutMathJaxSvgFragments,
+  normalizeMathJaxSvg,
   renderDocumentMath,
 } from '../src/math';
 import { parseMarkdown } from '../src/parser';
@@ -123,6 +125,30 @@ describe('MathJax SVG renderer', () => {
     await expect(
       renderer.render({ latex: String.raw`\notARealCommand`, display: false, mathScale: 1 }),
     ).rejects.toBeInstanceOf(MathRenderError);
+  });
+});
+
+describe('MathJax SVG fragment spacing', () => {
+  it('preserves documented mjx-break size=3 spacing while composing one atomic SVG', () => {
+    const raw =
+      '<mjx-container><svg width="1.448ex" height="2.262ex" viewBox="0 -750 640 1000"><g data-latex="\\alpha"/></svg><mjx-break size="3"> </mjx-break><svg width="3.562ex" height="2.262ex" viewBox="0 -750 1574.2 1000"><g data-latex="+ \\beta"/></svg></mjx-container>';
+    const layout = layoutMathJaxSvgFragments(raw);
+    const expected = (1.448 + 3.562) * 8 + 0.222 * 16;
+    expect(layout.box.width).toBeCloseTo(expected, 8);
+    expect(layout.spacers).toEqual([0.222 * 16, 0]);
+    expect(layout.offsets[1]).toBeCloseTo(640 + (0.222 * 16) / ((1.448 * 8) / 640), 8);
+    const normalized = normalizeMathJaxSvg(raw, 1);
+    expect(normalized.match(/<svg\b/g)).toHaveLength(1);
+    expect(normalized).toContain(`width="${expected}"`);
+    expect(normalized).toContain(`translate(${Number(layout.offsets[1]!.toFixed(6))},0)`);
+  });
+
+  it('uses MathJax inline-break letter-spacing as literal 1em plus CSS adjustment', () => {
+    const raw = (style: string) =>
+      `<svg width="1ex" height="1ex" viewBox="0 -500 500 500"></svg><mjx-break style="letter-spacing: ${style}"> </mjx-break><svg width="1ex" height="1ex" viewBox="0 -500 500 500"></svg>`;
+    expect(layoutMathJaxSvgFragments(raw('-0.75em')).spacers[0]).toBe(4);
+    expect(layoutMathJaxSvgFragments(raw('0.25em')).spacers[0]).toBe(20);
+    expect(() => layoutMathJaxSvgFragments(raw('-1.01em'))).toThrow('invalid letter-spacing');
   });
 });
 

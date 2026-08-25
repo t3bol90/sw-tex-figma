@@ -13,6 +13,7 @@ const settings = {
   width: 100,
   mathScale: 1,
   inheritTypography: true,
+  textAlignment: 'left' as const,
   typography: {
     fontName: { family: 'Inter', style: 'Regular' },
     fontSize: 16,
@@ -47,7 +48,7 @@ const node = (type: string, parent: TestNode | null = null, name = ''): TestNode
 describe('generated document discovery', () => {
   it('finds only a canonical ancestor and migrates v1 with root geometry fallback', () => {
     const root = node('FRAME');
-    root.values.set('math-text-version', '2');
+    root.values.set('math-text-version', '3');
     root.values.set('math-text-document', serializePersistedDocumentState(data));
     const child = node('FRAME', root);
     root.children.push(child);

@@ -12,7 +12,7 @@ import { MATHJAX_SVG_RENDERER_IDENTITY } from '../shared/persistence';
 import { BoundedMathCache } from './cache';
 import { createMathCacheKey } from './cache-key';
 import { installBundledFontData } from './font-data';
-import { extractSvgBox, metricsFromSvgBox } from './metrics';
+import { layoutMathJaxSvgFragments, metricsFromSvgBox } from './metrics';
 import { getMathJaxError, normalizeMathJaxSvg } from './svg';
 
 /** This exact identity is deliberately part of every cache key and persisted output contract. */
@@ -70,7 +70,7 @@ export class MathJaxSvgRenderer implements MathRenderer {
       const serialized = this.adaptor.outerHTML(converted);
       const texError = getMathJaxError(serialized);
       if (texError !== undefined) throw new MathRenderError(texError, request.latex);
-      const svgBox = extractSvgBox(serialized);
+      const svgBox = layoutMathJaxSvgFragments(serialized).box;
       const svg = normalizeMathJaxSvg(serialized, request.mathScale);
       const metrics = metricsFromSvgBox(svgBox, request.mathScale);
       const payload: RenderedMathPayload = {

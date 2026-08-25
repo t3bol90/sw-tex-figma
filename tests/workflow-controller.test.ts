@@ -16,6 +16,7 @@ const settings = {
   width: 200,
   mathScale: 1,
   inheritTypography: true,
+  textAlignment: 'left' as const,
   typography: {
     fontName: { family: 'Inter', style: 'Regular' },
     fontSize: 16,
@@ -68,45 +69,43 @@ describe('workflow controller', () => {
       canApply: true,
     });
   });
-  it('resumes a create selection-change context as INITIALIZE without rereading selection', async () => {
+  it('captures create selection once and ignores later selection changes', async () => {
     const sent: PluginToUIMessage[] = [];
     let reads = 0;
-    const inherited = {
-      kind: 'selected' as const,
-      snapshot: {
-        source: 'selected',
-        width: 123,
-        typography: settings.typography,
-        placement: { x: 1, y: 2, rotation: 0 },
-      },
-    };
     const controller = createWorkflowController({
       mode: 'create',
-      readSelection: async () => (++reads === 1 ? { kind: 'no-selection' as const } : inherited),
+      readSelection: async () =>
+        ++reads === 1
+          ? { kind: 'no-selection' as const }
+          : {
+              kind: 'selected' as const,
+              snapshot: {
+                source: 'selected',
+                width: 123,
+                typography: settings.typography,
+                placement: { x: 1, y: 2, rotation: 0 },
+              },
+            },
       readTarget: async () => undefined,
       renderDocument: async () => ({ rootName: 'Math Paragraph' }),
       postToUi: (message) => sent.push(message),
       closePlugin: () => undefined,
     });
     await controller.initialize();
+    const initial = sent[0];
     await controller.selectionChanged();
-    const changed = sent[1];
+    expect(reads).toBe(1);
+    expect(sent).toHaveLength(1);
     controller.handleMessage({ type: 'REQUEST_INITIALIZATION' });
-    expect(reads).toBe(2);
-    expect(sent[2]).toMatchObject({
-      type: 'INITIALIZE',
-      source: 'selected',
-      workflowToken: changed?.type === 'SELECTION_CHANGED' ? changed.workflowToken : undefined,
-    });
+    expect(sent[1]).toMatchObject({ type: 'INITIALIZE', workflowToken: tokenOf(initial) });
   });
-  it('uses a manual root width for reflow and marks only auto workflows for auto apply', async () => {
+  it('initializes reflow from persisted width and honours submitted settings without auto apply', async () => {
     const sent: PluginToUIMessage[] = [];
     const calls: WorkflowRenderRequest[] = [];
     const controller = createWorkflowController({
       mode: 'reflow',
       readSelection: async () => ({ kind: 'no-selection' }),
       readTarget: async () => target,
-      currentWidth: () => 345,
       renderDocument: async (request) => {
         calls.push(request);
         return { rootName: 'Math Paragraph' };
@@ -115,11 +114,11 @@ describe('workflow controller', () => {
       closePlugin: () => undefined,
     });
     await controller.initialize();
-    expect(sent[0]).toMatchObject({ autoApply: true, settings: { width: 345 } });
+    expect(sent[0]).toMatchObject({ autoApply: false, settings: { width: 200 } });
     controller.handleMessage(render(tokenOf(sent[0])));
     await Promise.resolve();
     await Promise.resolve();
-    expect(calls[0]?.settings.width).toBe(345);
+    expect(calls[0]?.settings.width).toBe(200);
   });
   it('rejects invalid generated selection without exposing a destructive Apply', async () => {
     const sent: PluginToUIMessage[] = [];
@@ -173,6 +172,7 @@ describe('workflow controller', () => {
     ) as Record<string, unknown>;
     v2.version = 1;
     delete v2.compiledWidth;
+    delete v2.textAlignment;
     const values = new Map([
       ['math-text-version', '1'],
       ['math-text-document', JSON.stringify(v2)],
@@ -188,7 +188,6 @@ describe('workflow controller', () => {
       mode: 'reflow',
       readSelection: async () => ({ kind: 'no-selection' }),
       readTarget: async () => v1Target,
-      currentWidth: () => 333,
       renderDocument: async () => ({ rootName: 'Math Paragraph' }),
       postToUi: (message) => sent.push(message),
       closePlugin: () => undefined,
@@ -288,5 +287,303 @@ describe('workflow controller', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(calls[1]?.selectedSnapshot).toBeUndefined();
+  });
+  it('uses submitted edit/reflow controls and forces mathScale to one', async () => {
+    const calls: WorkflowRenderRequest[] = [];
+    const sent: PluginToUIMessage[] = [];
+    const controller = createWorkflowController({
+      mode: 'edit',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => target,
+      renderDocument: async (request) => {
+        calls.push(request);
+        return { rootName: 'Math Paragraph' };
+      },
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    controller.handleMessage({
+      ...render(tokenOf(sent[0])),
+      settings: {
+        ...settings,
+        width: 321,
+        textAlignment: 'right',
+        mathScale: 1,
+        typography: { ...settings.typography, fontSize: 24 },
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls[0]?.settings).toMatchObject({
+      width: 321,
+      textAlignment: 'right',
+      mathScale: 1,
+      typography: { fontSize: 24 },
+    });
+  });
+  it('deduplicates, sorts, bounds Figma fonts and reports a failed list without losing current selector context', async () => {
+    const sent: PluginToUIMessage[] = [];
+    const controller = createWorkflowController({
+      mode: 'create',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => undefined,
+      availableFonts: async () => [
+        { family: 'Z', style: 'Regular' },
+        { family: 'A', style: 'Bold' },
+        { family: 'A', style: 'Bold' },
+        { family: '', style: 'bad' },
+      ],
+      renderDocument: async () => ({ rootName: 'Math Paragraph' }),
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    await Promise.resolve();
+    expect(sent.find((message) => message.type === 'AVAILABLE_FONT_FAMILIES')).toMatchObject({
+      families: ['A', 'Z'],
+    });
+    controller.handleMessage({ type: 'REQUEST_FONT_STYLES', family: 'A' });
+    expect(sent.at(-1)).toMatchObject({
+      type: 'AVAILABLE_FONT_STYLES',
+      family: 'A',
+      styles: ['Bold'],
+    });
+    const capped: PluginToUIMessage[] = [];
+    const capController = createWorkflowController({
+      mode: 'create',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => undefined,
+      availableFonts: async () =>
+        Array.from({ length: 5001 }, (_, index) => ({ family: `F${index}`, style: 'Regular' })),
+      renderDocument: async () => ({ rootName: 'x' }),
+      postToUi: (message) => capped.push(message),
+      closePlugin: () => undefined,
+    });
+    await capController.initialize();
+    await Promise.resolve();
+    const cappedFonts = capped.find((message) => message.type === 'AVAILABLE_FONT_FAMILIES');
+    expect(cappedFonts?.type === 'AVAILABLE_FONT_FAMILIES' && cappedFonts.families).toHaveLength(
+      5001,
+    );
+    const failed: PluginToUIMessage[] = [];
+    const failing = createWorkflowController({
+      mode: 'create',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => undefined,
+      availableFonts: async () => {
+        throw new Error('no fonts');
+      },
+      renderDocument: async () => ({ rootName: 'x' }),
+      postToUi: (message) => failed.push(message),
+      closePlugin: () => undefined,
+    });
+    await failing.initialize();
+    await Promise.resolve();
+    expect(failed.find((message) => message.type === 'AVAILABLE_FONT_FAMILIES')).toMatchObject({
+      families: [],
+      status: expect.stringContaining('Could not load Figma fonts'),
+    });
+  });
+  it('posts a usable context before deferred fonts and keeps its token stable when fonts arrive', async () => {
+    const sent: PluginToUIMessage[] = [];
+    const calls: WorkflowRenderRequest[] = [];
+    let fetches = 0;
+    let resolveFonts: ((fonts: readonly { family: string; style: string }[]) => void) | undefined;
+    const controller = createWorkflowController({
+      mode: 'create',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => undefined,
+      availableFonts: () => {
+        fetches += 1;
+        return new Promise((resolve) => {
+          resolveFonts = resolve;
+        });
+      },
+      renderDocument: async (request) => {
+        calls.push(request);
+        return { rootName: 'Math Paragraph' };
+      },
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    const initial = sent[0];
+    expect(initial).toMatchObject({ type: 'INITIALIZE', canApply: true });
+    const token = tokenOf(initial);
+    controller.handleMessage(render(token));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toHaveLength(1);
+    controller.handleMessage({ type: 'REQUEST_INITIALIZATION' });
+    expect(fetches).toBe(1);
+    resolveFonts?.([{ family: 'Inter', style: 'Regular' }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent.at(-1)).toMatchObject({ type: 'AVAILABLE_FONT_FAMILIES', families: ['Inter'] });
+    expect(tokenOf(sent.find((message) => message.type === 'INITIALIZE'))).toBe(token);
+    expect(sent.filter((message) => message.type === 'RENDER_ERROR')).toHaveLength(0);
+  });
+  it('syncs fresh prose typography while preserving submitted width and alignment', async () => {
+    const sent: PluginToUIMessage[] = [];
+    const calls: WorkflowRenderRequest[] = [];
+    const fresh = {
+      ...settings.typography,
+      fontName: { family: 'Inter', style: 'Bold' },
+      fontSize: 22,
+    };
+    const controller = createWorkflowController({
+      mode: 'sync-typography',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => target,
+      readSyncedTypography: async () => fresh,
+      renderDocument: async (request) => {
+        calls.push(request);
+        return { rootName: 'Math Paragraph' };
+      },
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    controller.handleMessage({
+      ...render(tokenOf(sent[0])),
+      settings: { ...settings, width: 321, textAlignment: 'center' },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls[0]?.settings).toMatchObject({
+      width: 321,
+      textAlignment: 'center',
+      mathScale: 1,
+      typography: fresh,
+    });
+  });
+  it('replays cached fonts with the exact locked context after an early UI post is lost', async () => {
+    const sent: PluginToUIMessage[] = [];
+    let fetches = 0;
+    const controller = createWorkflowController({
+      mode: 'create',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => undefined,
+      availableFonts: async () => {
+        fetches += 1;
+        return [{ family: 'Inter', style: 'Regular' }];
+      },
+      renderDocument: async () => ({ rootName: 'Math Paragraph' }),
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    await Promise.resolve();
+    const firstContext = sent.find((message) => message.type === 'INITIALIZE');
+    const firstToken = tokenOf(firstContext);
+    sent.length = 0; // Simulate posts that arrived before the iframe listener subscribed.
+    controller.handleMessage({ type: 'REQUEST_INITIALIZATION' });
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({ type: 'INITIALIZE', workflowToken: firstToken });
+    expect(sent[1]).toMatchObject({ type: 'AVAILABLE_FONT_FAMILIES', families: ['Inter'] });
+    expect(fetches).toBe(1);
+  });
+  it('replays early cached fonts while a slow first context is still unresolved', async () => {
+    const sent: PluginToUIMessage[] = [];
+    const selectionResolvers: Array<(result: { kind: 'no-selection' }) => void> = [];
+    let resolveFonts: ((fonts: readonly { family: string; style: string }[]) => void) | undefined;
+    let fontFetches = 0;
+    const controller = createWorkflowController({
+      mode: 'create',
+      readSelection: () =>
+        new Promise((resolve) => {
+          selectionResolvers.push(resolve);
+        }),
+      readTarget: async () => undefined,
+      availableFonts: () => {
+        fontFetches += 1;
+        return new Promise((resolve) => {
+          resolveFonts = resolve;
+        });
+      },
+      renderDocument: async () => ({ rootName: 'Math Paragraph' }),
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    const firstInitialization = controller.initialize();
+    resolveFonts?.([{ family: 'Inter', style: 'Regular' }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    sent.length = 0; // Both early posts were before iframe subscription.
+    controller.handleMessage({ type: 'REQUEST_INITIALIZATION' });
+    await Promise.resolve(); // The request starts a second, still context-only initialization.
+    selectionResolvers.forEach((resolve) => resolve({ kind: 'no-selection' }));
+    await firstInitialization;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent.find((message) => message.type === 'AVAILABLE_FONT_FAMILIES')).toMatchObject({
+      families: ['Inter'],
+    });
+    expect(sent.find((message) => message.type === 'INITIALIZE')).toMatchObject({
+      canApply: true,
+      workflowToken: expect.any(Number),
+    });
+    expect(fontFetches).toBe(1);
+  });
+  it('does not retarget Create after a successful render-induced selection change', async () => {
+    const sent: PluginToUIMessage[] = [];
+    let reads = 0;
+    const controller = createWorkflowController({
+      mode: 'create',
+      readSelection: async () =>
+        ++reads === 1
+          ? { kind: 'no-selection' as const }
+          : {
+              kind: 'selected' as const,
+              snapshot: {
+                source: 'new selection',
+                width: 100,
+                typography: settings.typography,
+                placement: { x: 0, y: 0, rotation: 0 },
+              },
+            },
+      readTarget: async () => undefined,
+      renderDocument: async () => ({ rootName: 'Math Paragraph' }),
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    controller.handleMessage(render(tokenOf(sent[0])));
+    await Promise.resolve();
+    await Promise.resolve();
+    const beforeSelectionChange = sent.length;
+    await controller.selectionChanged();
+    expect(reads).toBe(1);
+    expect(sent).toHaveLength(beforeSelectionChange);
+  });
+  it('keeps Roboto selectable after more than 5000 earlier sorted style pairs', async () => {
+    const sent: PluginToUIMessage[] = [];
+    const controller = createWorkflowController({
+      mode: 'create',
+      readSelection: async () => ({ kind: 'no-selection' }),
+      readTarget: async () => undefined,
+      availableFonts: async () => [
+        ...Array.from({ length: 5001 }, (_, index) => ({
+          family: 'Mukta Vaani',
+          style: `Style ${index}`,
+        })),
+        { family: 'Roboto', style: 'Regular' },
+      ],
+      renderDocument: async () => ({ rootName: 'x' }),
+      postToUi: (message) => sent.push(message),
+      closePlugin: () => undefined,
+    });
+    await controller.initialize();
+    await Promise.resolve();
+    expect(sent.find((message) => message.type === 'AVAILABLE_FONT_FAMILIES')).toMatchObject({
+      families: expect.arrayContaining(['Mukta Vaani', 'Roboto']),
+    });
+    controller.handleMessage({ type: 'REQUEST_FONT_STYLES', family: 'Roboto' });
+    expect(sent.at(-1)).toMatchObject({
+      type: 'AVAILABLE_FONT_STYLES',
+      family: 'Roboto',
+      styles: ['Regular'],
+    });
   });
 });

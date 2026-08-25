@@ -18,10 +18,16 @@ import { readPersistedDocumentState } from './figma/persistence';
 import { isUIToPluginMessage, type PluginToUIMessage, type WorkflowMode } from './shared/messages';
 
 declare const __html__: string;
-const UI_SIZE = { width: 440, height: 560 };
+const UI_SIZE = { width: 440, height: 620 };
 const postToUi = (message: PluginToUIMessage): void => {
   figma.ui.postMessage(message);
 };
+// One controller-session inventory promise serves UI choices and marked-font resolution.
+let availableFontsPromise: Promise<readonly FontName[]> | undefined;
+const listAvailableFonts = (): Promise<readonly FontName[]> =>
+  (availableFontsPromise ??= figma
+    .listAvailableFontsAsync()
+    .then((fonts) => fonts.map((font) => font.fontName)));
 const command: WorkflowMode =
   figma.command === 'edit'
     ? 'edit'
@@ -32,13 +38,13 @@ const command: WorkflowMode =
         : 'create';
 
 const renderApi: FigmaRenderApi = {
+  listAvailableFontsAsync: listAvailableFonts,
   loadFontAsync: (font: FontName) => figma.loadFontAsync(font),
   createText: () => figma.createText(),
+  flatten: (nodes) => figma.flatten(nodes as TextNode[]),
   createNodeFromSvg: (svg: string) => figma.createNodeFromSvg(svg),
   createFrame: () => figma.createFrame(),
   appendChild: (parent, child) => (parent as FrameNode).appendChild(child as SceneNode),
-  listAvailableFontsAsync: async () =>
-    (await figma.listAvailableFontsAsync()).map((font) => font.fontName),
   get currentPage() {
     return figma.currentPage;
   },
@@ -55,7 +61,7 @@ const targetForRoot = (node: unknown): WorkflowTarget | undefined => {
 };
 const targetAfterCommit = (root: unknown): WorkflowTarget => {
   const target = targetForRoot(root);
-  if (!target) throw new Error('Replacement committed without valid v2 persistence.');
+  if (!target) throw new Error('Replacement committed without valid v3 persistence.');
   return target;
 };
 const renderExisting = async (
@@ -97,6 +103,7 @@ const renderCreate = async (
 };
 const controller = createWorkflowController({
   mode: command,
+  availableFonts: listAvailableFonts,
   readSelection: () =>
     readSelectionSnapshot({
       mixed: figma.mixed,
@@ -111,7 +118,6 @@ const controller = createWorkflowController({
     return found ? targetForRoot(found.root) : undefined;
   },
   readSyncedTypography: async (target) => firstNativeProseTypography(target.node, figma.mixed),
-  currentWidth: (target) => widthOf(target.node),
   postToUi,
   closePlugin: () => figma.closePlugin(),
   renderDocument: async (request) =>
@@ -125,8 +131,7 @@ figma.ui.onmessage = (message: unknown) => {
   }
   controller.handleMessage(message);
 };
-figma.on('selectionchange', () => {
-  void controller.selectionChanged();
-});
+// Create captures selection once at command open. Do not retarget a dirty editor
+// when canvas selection changes during editing or after a replacement render.
 // The UI repeats REQUEST_INITIALIZATION after subscribing, so an early post cannot be lost.
 void controller.initialize();

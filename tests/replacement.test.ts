@@ -40,6 +40,7 @@ const request = {
     width: 1,
     mathScale: 1,
     inheritTypography: true,
+    textAlignment: 'left' as const,
     typography: {
       fontName: { family: 'I', style: 'R' },
       fontSize: 1,

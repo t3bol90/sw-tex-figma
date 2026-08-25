@@ -968,14 +968,8 @@ paragraph.setRelaunchData({
 
 This gives the user a direct path back into the source editor after selecting the generated paragraph.
 
-Suggested plugin commands:
-
-```text
-Create Math Text
-Edit Selected
-Reflow Selected
-Sync Typography
-```
+The manifest has no `menu` property, so Figma Run opens the default create workflow directly.
+Generated nodes expose editing through the separate `Edit Math Text` relaunch action. Its Apply operation reflows when source or layout settings change. `sync-typography` is reserved for internal/controller use and is not exposed in the direct-Run UX.
 
 ---
 
@@ -990,7 +984,7 @@ Triggers:
 - changed font size,
 - changed line height,
 - edited source,
-- changed math scale.
+- changed prose font size (math follows it).
 
 Recommended architecture:
 
@@ -1268,20 +1262,6 @@ Conceptual example:
   "networkAccess": {
     "allowedDomains": ["none"]
   },
-  "menu": [
-    {
-      "name": "Create Math Text",
-      "command": "create"
-    },
-    {
-      "name": "Edit Selected",
-      "command": "edit"
-    },
-    {
-      "name": "Reflow Selected",
-      "command": "reflow"
-    }
-  ],
   "relaunchButtons": [
     {
       "command": "edit",
@@ -1318,7 +1298,7 @@ Suggested layout:
 │ Inter Regular · 16 / 24 · From selection │
 │                                          │
 │ Width: 480                               │
-│ Math scale: 1.0×                         │
+│ Alignment: Left / Center / Right / Justify · Math follows font size  │
 ├──────────────────────────────────────────┤
 │ Error / preview                          │
 ├──────────────────────────────────────────┤
@@ -1389,6 +1369,34 @@ function migrateDocument(
 This prevents future plugin updates from breaking older Figma files.
 
 ---
+
+
+## Current v3 workflow and persistence contract
+
+Current output persists an exact-key **v3** record. It requires canonical source, width,
+typography, `inheritTypography`, `mathScale: 1`, `textAlignment`, renderer identity, and a
+positive `compiledWidth`. Strict v1 records have neither compiled width nor alignment; strict v2
+records have compiled width but no alignment. Both migrate only in memory to v3 with
+`textAlignment: "left"` and `mathScale: 1`. v3 also accepts `"justify"` without a version bump. The old node is never written before its replacement
+commits.
+
+Create captures the selection once when the command opens, then applies submitted controls; later canvas selection changes do not retarget or overwrite the open editor. Edit keeps its locked replacement target and canonical source,
+but uses submitted width, typography, color, and alignment. Reflow initializes persisted settings,
+does not auto-render, and only applies after **Apply reflow**. Sync Typography can auto-render: it
+reads native prose typography fresh, uses its font, size, and color, and preserves submitted width
+and alignment. MathJax is rendered at its 16px em mapping and layout scales it once by
+`fontSize / 16`; there is no independent current math scale.
+
+Font inventory is obtained only from `figma.listAvailableFontsAsync()`. Exact pairs are cached;
+deduplicated family names arrive asynchronously first, then exact styles are requested only for the
+selected family. This avoids globally truncating later alphabetic families such as Roboto. A failed
+or empty list leaves the inherited current pair selectable, and inventory messages cannot change
+the locked context/token. RGB input
+clamps channel conversion, rejects malformed hex, and preserves first-fill opacity.
+
+After native TextNode width reconciliation, every line/display uses final root width `W`: left is
+`0`, center is `(W - w) / 2`, and right is `W - w`. Over-wide content is at `0`. The non-clipping
+root expands for actual overflow, then all blocks are positioned against that final width.
 
 # 36. Generated Node Metadata
 

@@ -1,3 +1,4 @@
+import { MAX_FONT_DESCRIPTOR_LENGTH, MAX_FONT_SIZE, MIN_FONT_SIZE } from '../shared/messages';
 import type {
   FontDescriptor,
   LetterSpacing,
@@ -70,7 +71,15 @@ function readFontDescriptor(value: unknown): FontDescriptor | undefined {
   if (!isRecord(value) || typeof value.family !== 'string' || typeof value.style !== 'string') {
     return undefined;
   }
-  if (value.family.length === 0 || value.style.length === 0) return undefined;
+  if (
+    value.family.length === 0 ||
+    value.style.length === 0 ||
+    value.family.length > MAX_FONT_DESCRIPTOR_LENGTH ||
+    value.style.length > MAX_FONT_DESCRIPTOR_LENGTH ||
+    value.family.includes('\u0000') ||
+    value.style.includes('\u0000')
+  )
+    return undefined;
   return { family: value.family, style: value.style };
 }
 
@@ -150,8 +159,15 @@ export function extractTypography(
 
   const fontName = readFontDescriptor(node.fontName);
   if (fontName === undefined) return issue('INVALID_FONT_NAME', 'The selected font is not usable.');
-  if (!isFiniteNumber(node.fontSize) || node.fontSize <= 0) {
-    return issue('INVALID_FONT_SIZE', 'The selected font size is not a positive finite number.');
+  if (
+    !isFiniteNumber(node.fontSize) ||
+    node.fontSize < MIN_FONT_SIZE ||
+    node.fontSize > MAX_FONT_SIZE
+  ) {
+    return issue(
+      'INVALID_FONT_SIZE',
+      `The selected font size must be between ${MIN_FONT_SIZE} and ${MAX_FONT_SIZE}.`,
+    );
   }
   const lineHeight = readLineHeight(node.lineHeight);
   if (lineHeight === undefined)

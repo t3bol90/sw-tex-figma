@@ -45,7 +45,7 @@ it is never split.
 The breaker is greedy and accepts `candidateWidth <= width + 1e-6` by default.
 The tolerance can be configured only to absorb floating-point noise.
 
-## Vertical calibration and math scale
+## Vertical calibration and typography-coupled math size
 
 PR 4 returns only native prose width/height. `DEFAULT_PROSE_BASELINE_CALIBRATION`
 is expressly an estimate, not a Figma-measured ascent/descent. Its 0.8em ascent
@@ -62,7 +62,7 @@ by future visual calibration. Empty forced lines use configured line height, or
 `1.2 * fontSize` for AUTO, through the same estimate.
 
 PR 3 payload metrics and normalized SVG dimensions are already in a 16px-em
-coordinate system and already include `mathScale`. The compositor converts once
+coordinate system at the fixed current `mathScale: 1`. The compositor converts once
 to selected prose coordinates with `svgScale = typography.fontSize / 16`:
 
 ```text
@@ -71,15 +71,54 @@ importedSvgScale = svgScale
 ```
 
 PR 6 must import the PR 3 SVG at `importedSvgScale`; it must not apply
-`mathScale` again. Line ascent/descent are maxima of child values; each child
+an additional scale again. Line ascent/descent are maxima of child values; each child
 uses `y = lineTop + lineAscent - child.ascent`.
 
 ## Merge / kerning contract
 
+Ordinary U+0020 spaces are special only when a final merged native TextNode ends
+before math: Figma can report their standalone/terminal ink width as zero. The
+controller measures U+00A0 (NBSP) in the exact effective Figma font, size, and
+letter spacing as an advance-preserving probe. If NBSP also reports zero, it
+uses measured `H H` minus `HH`; no fixed gap is invented. This per-space result
+replaces the separator token's native width rather than adding to it, so letter
+spacing is applied once. Tabs and other breakable whitespace retain their native
+measurement. NBSP in source is non-breakable prose content, not a probe or
+separator.
+
 After break decisions, adjacent compatible prose and separator fragments merge
-only with equal marks and font resolution. A math child is always a merge
-barrier. Plan widths remain the deterministic sum of the independently measured
-parts. If a renderer remeasures merged text to account for cross-fragment
-kerning, it must retain compositor x positions/break decisions (or request a
-new composition with measurements at its chosen granularity); it must not
-silently use remeasured widths to shift later plan children.
+only with equal marks, font resolution, and effective-font baseline calibration.
+A math child is always a merge barrier. Plan widths remain deterministic fragment
+sums for break decisions. The final renderer deliberately remeasures each merged
+native TextNode and advances later siblings from its actual Figma width, so
+kerning and letter spacing cannot create a gap or overlap. This reconciliation
+never changes the selected break, source order, or math/mark boundaries.
+
+
+## PR 8 final-node reconciliation
+
+Break decisions still use Figma measurements of tokenizer fragments, so a render cannot silently reflow source order. After each compatible merged prose segment is created, the renderer uses that final native `TextNode.width` (including Figma kerning and letter spacing) as the line cursor advance. Every later math/prose child on that line is positioned from that actual cursor. The Line, Paragraph, and root frame widths are then resized from actual child extents and persisted as `compiledWidth`; transparent frames never clip overflow.
+
+Vertical placement uses each exact MathJax ascent and a typography-keyed reference-glyph calibration for prose. The final native text height is recalibrated before a line's max ascent/descent is taken. This changes later line coordinates only through their actual preceding line height, never through a fixed centering offset.
+
+
+## MathJax fragment normalization
+
+The lite MathJax adaptor may serialize adjacent SVG siblings separated by `mjx-break`; they are one delimiter span, not independent layers. The math pipeline composes them into one SVG/viewBox before measuring or Figma import. This prevents a greedy first-SVG extraction from rendering only `\alpha` from `\alpha + \beta`.
+
+For a final prose node ending in ordinary source whitespace immediately before math, Figma may omit the trailing whitespace advance from its ink-bound `width`. The renderer adds only the independently Figma-measured final separator advance to the actual merged visible-ink width. This explicitly assumes the observed Figma auto-width behavior that omits terminal separators from ink bounds; it never restores the whole planned segment, so kerning reconciliation remains intact.
+
+## Justified alignment
+
+`justify` is the fourth `TextAlignment` mode. It applies only to non-final,
+soft-wrapped paragraph lines that are narrower than the requested paragraph
+width and contain retained source separator tokens. Each separator run is one
+expandable gap, including a source space next to inline math. The compositor
+keeps those gaps at native-text boundaries; after Figma has reported every
+merged TextNode width, the renderer divides the positive remainder equally
+across the eligible gaps. It never scales glyphs or SVG math.
+
+Final paragraph lines, CommonMark hard-break terminal lines, blank lines,
+over-wide lines, lines without separators, and display math keep natural width.
+`justify` is a valid v3 persistence value, so the schema version remains 3;
+v1/v2 migration still explicitly defaults to `left`.

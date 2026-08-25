@@ -1,4 +1,5 @@
 import type { MathLineChild, DisplayMathPlan } from '../layout';
+import type { SolidFill } from '../shared/types';
 import { displayMathLayerName, mathLayerName } from './layer-names';
 
 type MathPlan = MathLineChild | DisplayMathPlan;
@@ -21,6 +22,7 @@ export function importMathSvg(
   api: FigmaSvgApi,
   plan: MathPlan,
   track: (node: FigmaSvgNode) => void,
+  fills?: readonly SolidFill[],
 ): FigmaSvgNode {
   if (
     typeof plan.rendered.svg !== 'string' ||
@@ -34,7 +36,7 @@ export function importMathSvg(
   )
     throw new Error('Math SVG must be self-contained.');
   if (!valid(plan.svgScale)) throw new Error('Math SVG scale must be finite and positive.');
-  const node = api.createNodeFromSvg(plan.rendered.svg);
+  const node = api.createNodeFromSvg(withExplicitMathPaint(plan.rendered.svg, fills));
   track(node);
   if (!valid(node.width) || !valid(node.height))
     throw new Error('Figma imported invalid SVG dimensions.');
@@ -56,4 +58,28 @@ export function importMathSvg(
   node.name =
     plan.type === 'display-math' ? displayMathLayerName(plan.latex) : mathLayerName(plan.latex);
   return node;
+}
+
+const hex = (value: number): string =>
+  Math.round(Math.max(0, Math.min(1, value)) * 255)
+    .toString(16)
+    .padStart(2, '0');
+
+/**
+ * Figma SVG import does not reliably resolve CSS `currentColor`. MathJax paths
+ * inherit paint from the root, so set a concrete root fill and only replace the
+ * paint token (never geometry, defs, or URL data). The first native prose fill
+ * is the documented math colour; its opacity is retained on the root.
+ */
+export function withExplicitMathPaint(svg: string, fills: readonly SolidFill[] = []): string {
+  const fill = fills[0];
+  const color = fill ? `#${hex(fill.color.r)}${hex(fill.color.g)}${hex(fill.color.b)}` : '#000000';
+  const opacity = fill?.opacity;
+  const root = /<svg\b[^>]*>/i.exec(svg)?.[0];
+  if (!root) throw new Error('Math SVG is missing an SVG root.');
+  const paintedRoot = root.replace(
+    />$/,
+    ` fill="${color}"${opacity === undefined ? '' : ` fill-opacity="${opacity}"`}>`,
+  );
+  return svg.replace(root, paintedRoot).replace(/\bcurrentColor\b/g, color);
 }

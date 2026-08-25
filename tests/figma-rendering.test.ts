@@ -132,7 +132,13 @@ describe('Figma document rendering', () => {
       api,
       {
         source: 'hello $x$',
-        settings: { width: 100, mathScale: 1, inheritTypography: true, typography },
+        settings: {
+          width: 100,
+          mathScale: 1,
+          inheritTypography: true,
+          textAlignment: 'left',
+          typography,
+        },
         blocks: [
           { type: 'paragraph', plan: paragraph },
           { type: 'display-math', plan: display },
@@ -159,7 +165,7 @@ describe('Figma document rendering', () => {
     expect(parsePersistedDocumentState(root.getPluginData('math-text-document'))?.source).toBe(
       'hello $x$',
     );
-    expect(root.getPluginData('math-text-version')).toBe('2');
+    expect(root.getPluginData('math-text-version')).toBe('3');
     expect(root.relaunch).toEqual({ edit: 'Edit Math Text' });
   });
   it('uses line-relative child coordinates so second-line absolute baselines stay correct', async () => {
@@ -211,7 +217,13 @@ describe('Figma document rendering', () => {
       api,
       {
         source: 'two',
-        settings: { width: 100, mathScale: 1, inheritTypography: true, typography },
+        settings: {
+          width: 100,
+          mathScale: 1,
+          inheritTypography: true,
+          textAlignment: 'left',
+          typography,
+        },
         blocks: [{ type: 'paragraph', plan: twoLines }],
         x: 0,
         y: 0,

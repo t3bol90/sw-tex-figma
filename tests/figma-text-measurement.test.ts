@@ -116,6 +116,39 @@ describe('native Figma text measurement', () => {
     ).rejects.toMatchObject({ code: 'MEASUREMENT_FAILED' });
     expect(events.at(-1)).toBe('remove');
   });
+  it('derives an ordinary-space advance from NBSP in the exact effective font', async () => {
+    const seen: string[] = [];
+    const measurer = new FigmaTextMeasurer({
+      loadFontAsync: async () => undefined,
+      createText: () => {
+        let characters = '';
+        return {
+          fontName: {},
+          fontSize: 0,
+          lineHeight: {},
+          letterSpacing: {},
+          fills: [],
+          set characters(value: string) {
+            characters = value;
+            seen.push(value);
+          },
+          get characters() {
+            return characters;
+          },
+          get width() {
+            return characters === ' ' ? 0 : characters === '\u00a0' ? 4 : 10;
+          },
+          get height() {
+            return 20;
+          },
+          remove() {},
+        };
+      },
+    });
+    expect((await measurer.measure({ text: ' ', typography })).width).toBe(0);
+    expect(await measurer.measureOrdinarySpaceAdvance({ text: ' ', typography })).toBe(4);
+    expect(seen).toContain('\u00a0');
+  });
 });
 
 describe('text measurement cache', () => {

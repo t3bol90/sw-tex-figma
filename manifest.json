@@ -9,24 +9,6 @@
   "networkAccess": {
     "allowedDomains": ["none"]
   },
-  "menu": [
-    {
-      "name": "Create Math Text",
-      "command": "create"
-    },
-    {
-      "name": "Edit Selected",
-      "command": "edit"
-    },
-    {
-      "name": "Reflow Selected",
-      "command": "reflow"
-    },
-    {
-      "name": "Sync Typography",
-      "command": "sync-typography"
-    }
-  ],
   "relaunchButtons": [
     {
       "command": "edit",

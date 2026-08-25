@@ -38,7 +38,8 @@ if (/\bTextEncoder\b/.test(executable)) {
 }
 let shown = false;
 const figma = {
-  command: 'create',
+  // A manifest without `menu` invokes Run without a command; code.ts must default to create.
+  command: undefined,
   mixed: Symbol('mixed'),
   currentPage: { selection: [] },
   viewport: { center: { x: 0, y: 0 } },

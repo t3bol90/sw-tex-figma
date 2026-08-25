@@ -215,6 +215,24 @@ export class FigmaTextMeasurer {
     return measured;
   }
 
+  /**
+   * Measures a real font-specific U+0020 advance without changing final source.
+   * NBSP is an advance-preserving probe in the effective Figma font. Some fonts
+   * still expose no one-character bounds, so a measured `H H` minus `HH`
+   * differential is the documented fallback. No fixed pixel gap is invented.
+   */
+  public async measureOrdinarySpaceAdvance(request: TextMeasurementRequest): Promise<number> {
+    const base = { ...request, text: '\u00a0' };
+    const nbsp = await this.measure(base);
+    if (Number.isFinite(nbsp.width) && nbsp.width > 0) return nbsp.width;
+    const [withSpace, withoutSpace] = await Promise.all([
+      this.measure({ ...request, text: 'H H' }),
+      this.measure({ ...request, text: 'HH' }),
+    ]);
+    const differential = withSpace.width - withoutSpace.width;
+    return Number.isFinite(differential) && differential > 0 ? differential : 0;
+  }
+
   public clear(): void {
     this.cache.clear();
   }

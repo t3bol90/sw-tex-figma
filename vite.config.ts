@@ -1,10 +1,11 @@
-import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { defineConfig, type Plugin } from 'vite';
 
 const root = __dirname;
 const dist = resolve(root, 'dist');
+const uiStage = resolve(root, '.ui-stage');
 
 function findHtmlFile(directory: string): string | undefined {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -52,6 +53,11 @@ function inlineUiAssets(): Plugin {
       // Vite leaves these empty staging folders after inline assembly; Figma only needs two files.
       rmSync(resolve(outputDirectory, 'assets'), { recursive: true, force: true });
       rmSync(resolve(outputDirectory, 'src'), { recursive: true, force: true });
+      // Stage the UI then atomically replace only ui.html. Existing code.js remains
+      // available to an already-open Figma plugin throughout the UI build.
+      mkdirSync(dist, { recursive: true });
+      renameSync(resolve(outputDirectory, 'ui.html'), resolve(dist, 'ui.html'));
+      rmSync(outputDirectory, { recursive: true, force: true });
     },
   };
 }
@@ -85,7 +91,7 @@ export default defineConfig(({ mode }) => {
     plugins: [inlineUiAssets()],
     build: {
       emptyOutDir: true,
-      outDir: dist,
+      outDir: uiStage,
       // The one-file Figma iframe deliberately embeds MathJax and local SVG font tables.
       chunkSizeWarningLimit: 13_000,
       rollupOptions: {

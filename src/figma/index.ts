@@ -14,3 +14,5 @@ export * from './render-orchestrator';
 export * from './generated-target';
 export * from './replacement';
 export * from './workflow-controller';
+
+export * from './baseline-calibration';

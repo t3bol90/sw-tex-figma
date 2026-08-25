@@ -1,5 +1,5 @@
 import type { InlineRun, ParagraphNode, TextMark } from '../shared/document-model';
-import type { RenderedMathPayload, TypographyContext } from '../shared/types';
+import type { RenderedMathPayload, TextAlignment, TypographyContext } from '../shared/types';
 
 /** A native-text metric callback. It is deliberately independent of Figma. */
 export interface NativeTextMeasurementRequest {
@@ -18,6 +18,10 @@ export interface NativeTextMetrics {
 export type NativeTextMeasurer = (
   request: NativeTextMeasurementRequest,
 ) => Promise<NativeTextMetrics>;
+/** Host-derived advance for each U+0020 ordinary space when Figma trims it. */
+export type NativeSeparatorAdvanceMeasurer = (
+  request: NativeTextMeasurementRequest,
+) => Promise<number>;
 
 /** Matches PR 4's resolved-font input while avoiding a dependency on Figma modules. */
 export interface FontResolution {
@@ -35,7 +39,18 @@ export type FontResolver = (
 export interface ProseBaselineCalibration {
   /** Fraction of an em assigned above the baseline before leading is distributed. */
   readonly emAscentRatio: number;
+  /**
+   * True only when a host derived this from reference-glyph geometry. Figma has
+   * no direct TextNode baseline API; this is still an ink-based approximation.
+   */
+  readonly source?: 'reference-glyph' | 'fallback';
 }
+
+/** Host-owned, typography-sensitive calibration hook. It may use Figma probes. */
+export type ProseBaselineCalibrationProvider = (
+  typography: TypographyContext,
+  fontResolution?: FontResolution,
+) => Promise<ProseBaselineCalibration>;
 
 export interface LayoutMetrics {
   readonly width: number;
@@ -75,11 +90,14 @@ export type InlineToken = ProseToken | SeparatorToken | MathToken | HardBreakTok
 
 export interface MeasuredProseToken extends ProseToken {
   readonly metrics: LayoutMetrics;
+  /** Effective-font calibration used to derive this token's ascent/descent. */
+  readonly baselineCalibration?: ProseBaselineCalibration;
   readonly fontResolution?: FontResolution;
 }
 
 export interface MeasuredSeparatorToken extends SeparatorToken {
   readonly metrics: LayoutMetrics;
+  readonly baselineCalibration?: ProseBaselineCalibration;
   readonly fontResolution?: FontResolution;
 }
 
@@ -106,8 +124,16 @@ export interface ProseLineChild {
   readonly x: number;
   readonly y: number;
   readonly metrics: LayoutMetrics;
+  /** Effective-font calibration retained for final native-node bounds. */
+  readonly baselineCalibration?: ProseBaselineCalibration;
+  /** True only when this merged segment ends in tokenizer-recognized separator text. */
+  readonly endsWithSeparator?: boolean;
+  /** Figma-measured advance of that final separator token. */
+  readonly trailingSeparatorWidth?: number;
   /** The measured fragments used to make this merged renderer segment. */
   readonly measuredParts: readonly string[];
+  /** This source whitespace gap receives an equal justified expansion. */
+  readonly justifyGapAfter?: true;
 }
 
 export interface MathLineChild {
@@ -133,6 +159,8 @@ export interface LinePlan {
   readonly children: readonly LineChild[];
   /** True when emitted by a CommonMark hard break, including an empty line. */
   readonly forced: boolean;
+  /** A non-terminal soft-wrapped prose line with expandable source whitespace. */
+  readonly justified?: true;
 }
 
 export interface ParagraphPlan {
@@ -170,9 +198,13 @@ export interface MeasuredDocument {
 export interface MeasureParagraphOptions {
   readonly typography: TypographyContext;
   readonly measureText: NativeTextMeasurer;
+  /** Optional U+0020 advance probe; other tokenizer separators retain native width. */
+  readonly measureSeparatorAdvance?: NativeSeparatorAdvanceMeasurer;
   readonly renderedMath: readonly RenderedMathPayload[];
   readonly fontResolver?: FontResolver;
   readonly baselineCalibration?: ProseBaselineCalibration;
+  /** Optional per-effective-font calibration; errors are owned by the host. */
+  readonly baselineCalibrationProvider?: ProseBaselineCalibrationProvider;
 }
 
 export interface ComposeParagraphOptions {
@@ -180,14 +212,19 @@ export interface ComposeParagraphOptions {
   readonly emptyLineMetrics: LayoutMetrics;
   /** Width comparisons accept this small absolute amount to avoid float noise. */
   readonly tolerance?: number;
+  /** Justification is planned here and reconciled to native node widths by the renderer. */
+  readonly textAlignment?: TextAlignment;
 }
 
 export interface MeasureDocumentOptions {
   readonly typography: TypographyContext;
   readonly measureText: NativeTextMeasurer;
+  /** Optional U+0020 advance probe; other tokenizer separators retain native width. */
+  readonly measureSeparatorAdvance?: NativeSeparatorAdvanceMeasurer;
   readonly renderedMath: readonly RenderedMathPayload[];
   readonly fontResolver?: FontResolver;
   readonly baselineCalibration?: ProseBaselineCalibration;
+  readonly baselineCalibrationProvider?: ProseBaselineCalibrationProvider;
 }
 
 export type SourceInlineRun = InlineRun;

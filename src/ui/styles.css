@@ -17,7 +17,8 @@ button {
 
 .app {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: auto;
   flex-direction: column;
   gap: 10px;
   padding: 16px;
@@ -42,7 +43,7 @@ label {
 }
 
 .source-editor {
-  min-height: 260px;
+  min-height: 180px;
   overflow: auto;
   border: 1px solid var(--figma-color-border, #d0d0d0);
   border-radius: 4px;
@@ -51,7 +52,7 @@ label {
 }
 
 .source-editor .cm-editor {
-  min-height: 258px;
+  min-height: 178px;
   font:
     12px/1.45 ui-monospace,
     SFMono-Regular,
@@ -98,4 +99,30 @@ button.primary {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+.controls input,
+.controls select {
+  width: 100%;
+  padding: 5px;
+  color: inherit;
+  background: var(--figma-color-bg, #fff);
+  border: 1px solid var(--figma-color-border, #d0d0d0);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.control-status {
+  color: var(--figma-color-text-secondary, #6b6b6b);
+  font-weight: 400;
 }

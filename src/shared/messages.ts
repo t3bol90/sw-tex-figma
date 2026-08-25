@@ -1,4 +1,9 @@
-import type { RenderedMathPayload, RenderSettings, TypographyContext } from './types';
+import type {
+  FontDescriptor,
+  RenderedMathPayload,
+  RenderSettings,
+  TypographyContext,
+} from './types';
 
 export type WorkflowMode = 'create' | 'edit' | 'reflow' | 'sync-typography';
 
@@ -14,6 +19,8 @@ export type UIToPluginMessage =
   | { readonly type: 'REQUEST_SELECTION_STYLE' }
   /** UI subscription acknowledgement; controller resends its current context. */
   | { readonly type: 'REQUEST_INITIALIZATION' }
+  /** Request exact styles only for one family from the controller-owned inventory. */
+  | { readonly type: 'REQUEST_FONT_STYLES'; readonly family: string }
   | { readonly type: 'CLOSE' };
 
 export type PluginToUIMessage =
@@ -21,6 +28,7 @@ export type PluginToUIMessage =
       readonly type: 'INITIALIZE';
       readonly source?: string;
       readonly typography?: TypographyContext;
+      readonly availableFonts?: readonly FontDescriptor[];
       /** Complete controller-owned state. The UI never receives a replacement node id. */
       readonly settings?: RenderSettings;
       readonly workflow?: WorkflowMode;
@@ -35,6 +43,7 @@ export type PluginToUIMessage =
       readonly type: 'SELECTION_CHANGED';
       readonly source?: string;
       readonly typography?: TypographyContext;
+      readonly availableFonts?: readonly FontDescriptor[];
       /** Complete controller-owned state. The UI never receives a replacement node id. */
       readonly settings?: RenderSettings;
       readonly workflow?: WorkflowMode;
@@ -43,6 +52,19 @@ export type PluginToUIMessage =
       readonly canApply?: boolean;
       readonly width?: number;
       /** A non-destructive explanation of the selection/default state. */
+      readonly status?: string;
+    }
+  | {
+      /** Async inventory family update. It never changes workflow context. */
+      readonly type: 'AVAILABLE_FONT_FAMILIES';
+      readonly families: readonly string[];
+      readonly status?: string;
+    }
+  | {
+      /** Exact styles for one requested family; never a globally truncated pair list. */
+      readonly type: 'AVAILABLE_FONT_STYLES';
+      readonly family: string;
+      readonly styles: readonly string[];
       readonly status?: string;
     }
   | { readonly type: 'RENDER_ERROR'; readonly message: string }
@@ -59,8 +81,22 @@ const isFiniteNumber = (value: unknown): value is number =>
 const isBoundedString = (value: unknown, maximumLength = 100_000): value is string =>
   typeof value === 'string' && value.length <= maximumLength;
 
-const isFontDescriptor = (value: unknown): boolean =>
-  isRecord(value) && isBoundedString(value.family, 500) && isBoundedString(value.style, 500);
+export const MAX_FONT_DESCRIPTOR_LENGTH = 500;
+/** Legacy complete-pair payload bound; family/style protocol avoids sending this list. */
+export const MAX_AVAILABLE_FONTS = 5000;
+export const MAX_FONT_FAMILIES = 20_000;
+export const MAX_FONT_STYLES = 5000;
+export const MIN_FONT_SIZE = 1;
+export const MAX_FONT_SIZE = 512;
+
+export const isFontDescriptor = (value: unknown): value is FontDescriptor =>
+  isRecord(value) &&
+  isBoundedString(value.family, MAX_FONT_DESCRIPTOR_LENGTH) &&
+  value.family.length > 0 &&
+  !value.family.includes('\u0000') &&
+  isBoundedString(value.style, MAX_FONT_DESCRIPTOR_LENGTH) &&
+  value.style.length > 0 &&
+  !value.style.includes('\u0000');
 
 const isLineHeight = (value: unknown): boolean => {
   if (!isRecord(value) || typeof value.unit !== 'string') return false;
@@ -100,7 +136,8 @@ export const isTypographyContext = (value: unknown): value is TypographyContext 
   isRecord(value) &&
   isFontDescriptor(value.fontName) &&
   isFiniteNumber(value.fontSize) &&
-  value.fontSize > 0 &&
+  value.fontSize >= MIN_FONT_SIZE &&
+  value.fontSize <= MAX_FONT_SIZE &&
   isLineHeight(value.lineHeight) &&
   isLetterSpacing(value.letterSpacing) &&
   Array.isArray(value.fills) &&
@@ -112,10 +149,12 @@ export const isRenderSettings = (value: unknown): value is RenderSettings =>
   isFiniteNumber(value.width) &&
   value.width > 0 &&
   value.width <= 100_000 &&
-  isFiniteNumber(value.mathScale) &&
-  value.mathScale > 0 &&
-  value.mathScale <= 10 &&
+  value.mathScale === 1 &&
   typeof value.inheritTypography === 'boolean' &&
+  (value.textAlignment === 'left' ||
+    value.textAlignment === 'center' ||
+    value.textAlignment === 'right' ||
+    value.textAlignment === 'justify') &&
   isTypographyContext(value.typography);
 
 const isRenderedMathPayload = (value: unknown): value is RenderedMathPayload =>
@@ -157,6 +196,11 @@ export const isUIToPluginMessage = (value: unknown): value is UIToPluginMessage 
     case 'REQUEST_INITIALIZATION':
     case 'CLOSE':
       return Object.keys(value).length === 1;
+    case 'REQUEST_FONT_STYLES':
+      return (
+        Object.keys(value).length === 2 &&
+        isFontDescriptor({ family: value.family, style: 'requested' })
+      );
     default:
       return false;
   }
@@ -167,6 +211,10 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
 
   const hasValidOptionalContext =
     (value.typography === undefined || isTypographyContext(value.typography)) &&
+    (value.availableFonts === undefined ||
+      (Array.isArray(value.availableFonts) &&
+        value.availableFonts.length <= MAX_AVAILABLE_FONTS &&
+        value.availableFonts.every(isFontDescriptor))) &&
     (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0)) &&
     (value.status === undefined || isBoundedString(value.status, 10_000)) &&
     (value.settings === undefined || isRenderSettings(value.settings)) &&
@@ -192,6 +240,21 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
       return (
         (value.source === undefined || isBoundedString(value.source, 1_000_000)) &&
         hasValidOptionalContext
+      );
+    case 'AVAILABLE_FONT_FAMILIES':
+      return (
+        Array.isArray(value.families) &&
+        value.families.length <= MAX_FONT_FAMILIES &&
+        value.families.every((family) => isFontDescriptor({ family, style: 'family' })) &&
+        (value.status === undefined || isBoundedString(value.status, 10_000))
+      );
+    case 'AVAILABLE_FONT_STYLES':
+      return (
+        isFontDescriptor({ family: value.family, style: 'family' }) &&
+        Array.isArray(value.styles) &&
+        value.styles.length <= MAX_FONT_STYLES &&
+        value.styles.every((style) => isFontDescriptor({ family: value.family, style })) &&
+        (value.status === undefined || isBoundedString(value.status, 10_000))
       );
     case 'RENDER_ERROR':
     case 'RENDER_SUCCESS':

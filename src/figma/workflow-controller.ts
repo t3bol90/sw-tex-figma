@@ -1,8 +1,15 @@
 import { validateRenderedMathPayloads } from '../layout';
 import { parseMarkdown } from '../parser';
-import type { PluginToUIMessage, UIToPluginMessage, WorkflowMode } from '../shared/messages';
+import {
+  isFontDescriptor,
+  MAX_FONT_FAMILIES,
+  MAX_FONT_STYLES,
+  type PluginToUIMessage,
+  type UIToPluginMessage,
+  type WorkflowMode,
+} from '../shared/messages';
 import type { PersistedDocumentState } from '../shared/persistence';
-import type { RenderSettings, TypographyContext } from '../shared/types';
+import type { FontDescriptor, RenderSettings, TypographyContext } from '../shared/types';
 import type { GeneratedSceneNode } from './generated-target';
 import type { SelectionSnapshotOutcome, TextSelectionSnapshot } from './selection';
 import { DEFAULT_PARAGRAPH_WIDTH } from './selection';
@@ -25,7 +32,7 @@ export interface WorkflowRenderRequest {
 }
 export interface WorkflowRenderResult {
   readonly rootName: string;
-  /** The renderer returns this only after replacement commit and v2 persistence succeeds. */
+  /** The renderer returns this only after replacement commit and v3 persistence succeeds. */
   readonly nextTarget?: WorkflowTarget;
   /** A selected native text target was consumed and must never be reused. */
   readonly consumedSelectedSnapshot?: boolean;
@@ -33,9 +40,9 @@ export interface WorkflowRenderResult {
 export interface WorkflowControllerDependencies {
   readonly mode: WorkflowMode;
   readSelection(): Promise<SelectionSnapshotOutcome>;
+  availableFonts?(): Promise<readonly FontDescriptor[]>;
   readTarget(): Promise<WorkflowTarget | undefined>;
   readSyncedTypography?(target: WorkflowTarget): Promise<TypographyContext | undefined>;
-  currentWidth?(target: WorkflowTarget): number | undefined;
   renderDocument(request: WorkflowRenderRequest): Promise<WorkflowRenderResult>;
   postToUi(message: PluginToUIMessage): void;
   closePlugin(): void;
@@ -56,6 +63,7 @@ const defaultsFor = (dependencies: WorkflowControllerDependencies): RenderSettin
   typography: dependencies.defaults?.typography ?? DEFAULT_TYPOGRAPHY,
   mathScale: 1,
   inheritTypography: true,
+  textAlignment: 'left',
 });
 const statusForSelection = (
   outcome: Exclude<SelectionSnapshotOutcome, { kind: 'selected' }>,
@@ -70,17 +78,6 @@ const statusForSelection = (
     case 'invalid-text-selection':
       return `Could not replace selected text: ${outcome.issue.message} Apply creates a new result.`;
   }
-};
-const isPositive = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0;
-const effectiveWidth = (
-  target: WorkflowTarget,
-  dependencies: WorkflowControllerDependencies,
-): number => {
-  const currentWidth = dependencies.currentWidth?.(target) ?? target.width;
-  return isPositive(currentWidth) && Math.abs(currentWidth - target.state.compiledWidth) > 0.01
-    ? currentWidth
-    : target.state.width;
 };
 const messageFor = (type: ContextMessage['type'], payload: ContextPayload): ContextMessage =>
   type === 'INITIALIZE'
@@ -102,10 +99,86 @@ export function createWorkflowController(
   let generation = 0;
   let rendering = false;
   let lastContext: ContextMessage | undefined;
+  let fontLoad: Promise<void> | undefined;
+  /** Retained so an early pre-iframe post can be replayed without refetching. */
+  let cachedFontFamilies:
+    Extract<PluginToUIMessage, { type: 'AVAILABLE_FONT_FAMILIES' }> | undefined;
+  let cachedFontInventory: readonly FontDescriptor[] | undefined;
   const postContext = (type: ContextMessage['type'], payload: ContextPayload): void => {
     const message = messageFor(type, payload);
     lastContext = message;
     dependencies.postToUi(message);
+  };
+  // Inventory is intentionally independent of generation and target locking. A late
+  // result updates only choices, never source/settings/status or the Apply token.
+  const postCachedFontFamilies = (): void => {
+    if (cachedFontFamilies) dependencies.postToUi(cachedFontFamilies);
+  };
+  const postFontStyles = (family: string): void => {
+    if (!cachedFontInventory) return;
+    const styles = cachedFontInventory
+      .filter((font) => font.family === family)
+      .map((font) => font.style)
+      .sort((left, right) => left.localeCompare(right));
+    const limited = styles.slice(0, MAX_FONT_STYLES);
+    dependencies.postToUi({
+      type: 'AVAILABLE_FONT_STYLES',
+      family,
+      styles: limited,
+      ...(styles.length > limited.length
+        ? { status: `Too many styles for ${family}; showing the first ${MAX_FONT_STYLES}.` }
+        : {}),
+    });
+  };
+  const loadFonts = (): void => {
+    if (fontLoad || !dependencies.availableFonts) return;
+    fontLoad = dependencies
+      .availableFonts()
+      .then((fonts) => {
+        // Preserve every valid pair for on-demand lookup. A global sorted pair
+        // slice would hide later families such as Roboto.
+        cachedFontInventory = [...fonts]
+          .filter(isFontDescriptor)
+          .filter(
+            (font, index, all) =>
+              all.findIndex(
+                (other) => other.family === font.family && other.style === font.style,
+              ) === index,
+          );
+        const families = [...new Set(cachedFontInventory.map((font) => font.family))].sort(
+          (left, right) => left.localeCompare(right),
+        );
+        // Do not alphabetically trim families: it would make later real families
+        // (such as Roboto) unreachable. An implausibly oversized inventory fails
+        // honestly instead of silently hiding a suffix of the alphabet.
+        cachedFontFamilies =
+          families.length > MAX_FONT_FAMILIES
+            ? {
+                type: 'AVAILABLE_FONT_FAMILIES',
+                families: [],
+                status: `Figma returned too many font families (${families.length}). The current font remains available.`,
+              }
+            : {
+                type: 'AVAILABLE_FONT_FAMILIES',
+                families,
+                ...(families.length === 0
+                  ? {
+                      status:
+                        'No usable Figma fonts were returned. The current font remains available.',
+                    }
+                  : {}),
+              };
+        postCachedFontFamilies();
+      })
+      .catch(() => {
+        cachedFontInventory = [];
+        cachedFontFamilies = {
+          type: 'AVAILABLE_FONT_FAMILIES',
+          families: [],
+          status: 'Could not load Figma fonts. The current font remains available.',
+        };
+        postCachedFontFamilies();
+      });
   };
   const initializeCreate = async (type: ContextMessage['type']): Promise<void> => {
     const request = ++generation;
@@ -118,6 +191,7 @@ export function createWorkflowController(
         typography: outcome.snapshot.typography,
         mathScale: 1,
         inheritTypography: true,
+        textAlignment: 'left',
       };
       postContext(type, {
         source: outcome.snapshot.source,
@@ -163,10 +237,11 @@ export function createWorkflowController(
       return;
     }
     let settings: RenderSettings = {
-      width: effectiveWidth(found, dependencies),
-      mathScale: found.state.mathScale,
+      width: found.state.width,
+      mathScale: 1,
       inheritTypography: found.state.inheritTypography,
       typography: found.state.typography,
+      textAlignment: found.state.textAlignment,
     };
     if (mode === 'sync-typography') {
       const typography = await dependencies.readSyncedTypography?.(found);
@@ -191,14 +266,17 @@ export function createWorkflowController(
       workflow: mode,
       workflowToken: generation,
       canApply: true,
-      autoApply: mode === 'reflow' || mode === 'sync-typography',
+      autoApply: mode === 'sync-typography',
       status:
         mode === 'edit'
           ? 'Loaded canonical source and settings. Edit source, then Apply.'
-          : 'Loaded canonical source and settings. Rendering automatically…',
+          : mode === 'reflow'
+            ? 'Loaded canonical source and settings. Adjust controls, then Apply reflow.'
+            : 'Loaded canonical source and settings. Syncing typography automatically…',
     });
   };
   const initialize = async (): Promise<void> => {
+    loadFonts();
     if (mode === 'create') await initializeCreate('INITIALIZE');
     else await initializeExisting();
   };
@@ -232,21 +310,24 @@ export function createWorkflowController(
     try {
       const document = parseMarkdown(message.source);
       validateRenderedMathPayloads(document, message.math);
+      // Locked targets protect replacement identity and canonical source, not UI controls.
+      // Edit/Reflow honour the validated submitted layout and typography settings.
       const settings: RenderSettings = lockedTarget
-        ? {
-            width: effectiveWidth(lockedTarget, dependencies),
-            mathScale: lockedTarget.state.mathScale,
-            inheritTypography:
-              mode === 'sync-typography' ? true : lockedTarget.state.inheritTypography,
-            typography:
-              mode === 'sync-typography'
-                ? ((await dependencies.readSyncedTypography?.(lockedTarget)) ??
-                  (() => {
-                    throw new Error('No supported native prose typography was found.');
-                  })())
-                : lockedTarget.state.typography,
-          }
-        : message.settings;
+        ? mode === 'sync-typography'
+          ? {
+              ...message.settings,
+              width: message.settings.width,
+              textAlignment: message.settings.textAlignment,
+              mathScale: 1,
+              inheritTypography: true,
+              typography:
+                (await dependencies.readSyncedTypography?.(lockedTarget)) ??
+                (() => {
+                  throw new Error('No supported native prose typography was found.');
+                })(),
+            }
+          : { ...message.settings, mathScale: 1 }
+        : { ...message.settings, mathScale: 1 };
       const result = await dependencies.renderDocument({
         source: message.source,
         document,
@@ -278,19 +359,27 @@ export function createWorkflowController(
   };
   return {
     initialize,
-    selectionChanged: async () => {
-      if (mode === 'create' && !rendering) await initializeCreate('SELECTION_CHANGED');
-    },
+    // Selection is captured once during initialization; later canvas changes must
+    // never overwrite an in-progress Create editor or replacement snapshot.
+    selectionChanged: async () => undefined,
     handleMessage: (message) => {
       if (message.type === 'CLOSE') dependencies.closePlugin();
-      else if (
+      else if (message.type === 'REQUEST_FONT_STYLES') {
+        postFontStyles(message.family);
+      } else if (
         message.type === 'REQUEST_SELECTION_STYLE' ||
         message.type === 'REQUEST_INITIALIZATION'
       ) {
         // The iframe may subscribe after our first post. Resume the exact locked context; never retarget it.
-        if (lastContext)
+        if (lastContext) {
           dependencies.postToUi(messageFor('INITIALIZE', payloadFromContext(lastContext)));
-        else void initialize();
+          postCachedFontFamilies();
+        } else {
+          // Fonts may have resolved before a slow initial target/selection read.
+          // Replay their cached result to this now-subscribed iframe, then resume context.
+          postCachedFontFamilies();
+          void initialize();
+        }
       } else void render(message);
     },
   };

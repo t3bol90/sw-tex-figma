@@ -34,10 +34,14 @@ export interface TypographyContext {
   readonly textStyleId?: string;
 }
 
+export type TextAlignment = 'left' | 'center' | 'right' | 'justify';
+
 export interface RenderSettings {
   readonly width: number;
   readonly mathScale: number;
   readonly inheritTypography: boolean;
+  /** Explicit geometric alignment for every current render. */
+  readonly textAlignment: TextAlignment;
   /** Typography selected by the user or the safe create-flow default. */
   readonly typography: TypographyContext;
 }
