@@ -1,0 +1,83 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--figma-color-text, #1e1e1e);
+  background: var(--figma-color-bg, #fff);
+  font:
+    12px/1.4 Inter,
+    sans-serif;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 16px;
+}
+
+header p,
+.status {
+  color: var(--figma-color-text-secondary, #6b6b6b);
+}
+
+label {
+  font-weight: 600;
+}
+
+textarea {
+  min-height: 260px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--figma-color-border, #d0d0d0);
+  border-radius: 4px;
+  padding: 8px;
+  color: inherit;
+  background: var(--figma-color-bg-secondary, #f5f5f5);
+}
+
+.status {
+  min-height: 34px;
+}
+
+footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+button {
+  border: 1px solid var(--figma-color-border, #d0d0d0);
+  border-radius: 4px;
+  padding: 6px 12px;
+  color: inherit;
+  background: transparent;
+}
+
+button.primary {
+  border-color: var(--figma-color-bg-brand, #18a0fb);
+  color: #fff;
+  background: var(--figma-color-bg-brand, #18a0fb);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
