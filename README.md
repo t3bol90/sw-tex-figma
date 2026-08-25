@@ -94,4 +94,6 @@ pnpm build
 pnpm smoke:controller
 ```
 
-The controller smoke test executes `dist/code.js` without a DOM. Manual Figma checks remain necessary because mocked APIs cannot fully reproduce native font geometry and SVG import behavior. See [`docs/visual-qa-fixture.md`](docs/visual-qa-fixture.md) for the release checklist.
+The controller smoke test executes `dist/code.js` without a DOM. `pnpm build` also runs a production size gate: `dist/` must contain exactly `code.js` and `ui.html`, `code.js` must stay below 1 MB, and their total must stay below 15,000,000 bytes.
+
+Figma injects the special controller global `__html__` from the manifest's `ui` entry at runtime. The production controller deliberately does not embed `ui.html`; running `dist/code.js` outside Figma therefore requires a test harness to provide a nonempty `__html__` value. Manual Figma checks remain necessary because mocked APIs cannot fully reproduce native font geometry and SVG import behavior. See [`docs/visual-qa-fixture.md`](docs/visual-qa-fixture.md) for the release checklist.

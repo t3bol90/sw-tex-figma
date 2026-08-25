@@ -64,16 +64,13 @@ function inlineUiAssets(): Plugin {
 
 export default defineConfig(({ mode }) => {
   if (mode === 'code') {
-    const uiHtml = readFileSync(resolve(dist, 'ui.html'), 'utf8');
-
     return {
       // Figma controller runs in a worker-like VM. Prefer packages' worker/default exports,
       // never the browser conditional exports that may evaluate DOM code at module load.
+      // Figma supplies __html__ from manifest.ui when it starts this controller. Do not define
+      // it here: embedding dist/ui.html duplicates the UI in code.js and exceeds Figma's limit.
       resolve: {
         conditions: ['worker'],
-      },
-      define: {
-        __html__: JSON.stringify(uiHtml),
       },
       build: {
         emptyOutDir: false,

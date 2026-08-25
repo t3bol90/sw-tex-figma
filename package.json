@@ -6,7 +6,7 @@
   "packageManager": "pnpm@11.1.3",
   "scripts": {
     "dev": "pnpm run build --watch",
-    "build": "pnpm run build:ui && pnpm run build:code && pnpm run smoke:controller",
+    "build": "pnpm run build:ui && pnpm run build:code && pnpm run size:check && pnpm run smoke:controller",
     "build:ui": "vite build --mode ui",
     "build:code": "vite build --mode code",
     "typecheck": "tsc --noEmit",
@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "smoke:controller": "node scripts/controller-smoke.mjs"
+    "smoke:controller": "node scripts/controller-smoke.mjs",
+    "size:check": "node scripts/production-size.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "6.11.0",

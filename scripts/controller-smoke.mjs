@@ -67,6 +67,8 @@ const figma = {
 };
 const context = vm.createContext({
   figma,
+  // Figma injects this special global from manifest.ui for plugin controllers.
+  __html__: '<!doctype html><title>Math Text smoke UI</title>',
   console,
   Uint8Array,
   setTimeout,
