@@ -106,6 +106,7 @@ function handlePluginMessage(
       setStatus(message.status ?? 'Ready. Apply parses and renders all math locally.');
       return;
     case 'RENDER_ERROR':
+    case 'RENDER_SUCCESS':
       setStatus(message.message);
   }
 }

@@ -8,6 +8,7 @@ import { mathjax } from '@mathjax/src/js/mathjax.js';
 import { SVG } from '@mathjax/src/js/output/svg.js';
 
 import type { RenderedMathPayload } from '../shared/types';
+import { MATHJAX_SVG_RENDERER_IDENTITY } from '../shared/persistence';
 import { BoundedMathCache } from './cache';
 import { createMathCacheKey } from './cache-key';
 import { installBundledFontData } from './font-data';
@@ -15,8 +16,7 @@ import { extractSvgBox, metricsFromSvgBox } from './metrics';
 import { getMathJaxError, normalizeMathJaxSvg } from './svg';
 
 /** This exact identity is deliberately part of every cache key and persisted output contract. */
-export const MATHJAX_RENDERER_IDENTITY =
-  'mathjax-svg@4.1.3:newcm@4.1.3:tex-base-ams-newcommand:font-cache-none:em16';
+export const MATHJAX_RENDERER_IDENTITY = MATHJAX_SVG_RENDERER_IDENTITY;
 
 export interface MathRenderRequest {
   readonly latex: string;
