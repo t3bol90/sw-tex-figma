@@ -18,11 +18,14 @@
   },
   "dependencies": {
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "remark-math": "6.0.0",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5"
   },
   "devDependencies": {
-    "@figma/plugin-typings": "^1.117.0",
     "@eslint/js": "^9.26.0",
+    "@figma/plugin-typings": "^1.117.0",
     "@types/node": "^22.15.19",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
