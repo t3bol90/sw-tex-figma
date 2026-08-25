@@ -27,7 +27,8 @@ export type PluginToUIMessage =
       /** A non-destructive explanation of the selection/default state. */
       readonly status?: string;
     }
-  | { readonly type: 'RENDER_ERROR'; readonly message: string };
+  | { readonly type: 'RENDER_ERROR'; readonly message: string }
+  | { readonly type: 'RENDER_SUCCESS'; readonly message: string };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -159,6 +160,7 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
         hasValidOptionalContext
       );
     case 'RENDER_ERROR':
+    case 'RENDER_SUCCESS':
       return isBoundedString(value.message, 10_000);
     default:
       return false;
