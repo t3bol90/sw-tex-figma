@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { formatMathErrorForUi, MathJaxSvgRenderer, renderDocumentMath } from '../math';
+import { parseMarkdown } from '../parser';
 import { isPluginToUIMessage, type PluginToUIMessage } from '../shared/messages';
+import type { RenderSettings } from '../shared/types';
 import { postToPlugin } from './messages';
+import { SourceEditor } from './SourceEditor';
 
 const INITIAL_SOURCE = String.raw`Write Markdown with inline math such as $\alpha + \beta$.`;
+const DEFAULT_SETTINGS: RenderSettings = { width: 480, mathScale: 1, inheritTypography: true };
 
 export function App() {
   const [source, setSource] = useState(INITIAL_SOURCE);
   const [status, setStatus] = useState('Loading selection settings…');
+  const [isApplying, setIsApplying] = useState(false);
+  const renderer = useRef<MathJaxSvgRenderer | undefined>(undefined);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
@@ -15,16 +22,34 @@ export function App() {
         typeof event.data === 'object' && event.data !== null && 'pluginMessage' in event.data
           ? (event.data as { pluginMessage?: unknown }).pluginMessage
           : undefined;
-
       if (!isPluginToUIMessage(candidate)) return;
-
       handlePluginMessage(candidate, setSource, setStatus);
     };
-
     window.addEventListener('message', onMessage);
     postToPlugin({ type: 'REQUEST_SELECTION_STYLE' });
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  const apply = async (): Promise<void> => {
+    setIsApplying(true);
+    setStatus('Parsing and rendering local MathJax SVG…');
+    try {
+      const document = parseMarkdown(source);
+      const engine = renderer.current ?? new MathJaxSvgRenderer();
+      renderer.current = engine;
+      const math = await renderDocumentMath(document, DEFAULT_SETTINGS.mathScale, engine);
+      postToPlugin({ type: 'RENDER_DOCUMENT', source, math, settings: DEFAULT_SETTINGS });
+      setStatus(
+        math.length === 0
+          ? 'Sent document with no math.'
+          : `Sent ${math.length} rendered math expression${math.length === 1 ? '' : 's'}.`,
+      );
+    } catch (error: unknown) {
+      setStatus(formatMathErrorForUi(error));
+    } finally {
+      setIsApplying(false);
+    }
+  };
 
   return (
     <main className="app">
@@ -32,13 +57,8 @@ export function App() {
         <h1>Math Text</h1>
         <p>Markdown and LaTeX source</p>
       </header>
-      <label htmlFor="source">Source</label>
-      <textarea
-        id="source"
-        value={source}
-        onChange={(event) => setSource(event.target.value)}
-        spellCheck={false}
-      />
+      <label id="source-label">Source</label>
+      <SourceEditor value={source} onChange={setSource} />
       <p className="status" aria-live="polite">
         {status}
       </p>
@@ -49,10 +69,10 @@ export function App() {
         <button
           type="button"
           className="primary"
-          disabled
-          title="Available after rendering is added"
+          disabled={isApplying}
+          onClick={() => void apply()}
         >
-          Apply
+          {isApplying ? 'Rendering…' : 'Apply'}
         </button>
       </footer>
     </main>
@@ -67,7 +87,7 @@ function handlePluginMessage(
   switch (message.type) {
     case 'INITIALIZE':
       if (message.source !== undefined) setSource(message.source);
-      setStatus('Ready. Rendering will be added in the next implementation steps.');
+      setStatus('Ready. Apply parses and renders all math locally.');
       return;
     case 'SELECTION_CHANGED':
       setStatus('Selection settings received.');
