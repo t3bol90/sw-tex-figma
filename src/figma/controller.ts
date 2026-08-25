@@ -1,4 +1,10 @@
-import type { PluginToUIMessage, UIToPluginMessage } from '../shared/messages';
+import { validateRenderedMathPayloads } from '../layout';
+import { parseMarkdown } from '../parser';
+import {
+  isRenderSettings,
+  type PluginToUIMessage,
+  type UIToPluginMessage,
+} from '../shared/messages';
 import type { TypographyContext } from '../shared/types';
 import {
   DEFAULT_PARAGRAPH_WIDTH,
@@ -7,21 +13,29 @@ import {
 } from './selection';
 import { DEFAULT_TYPOGRAPHY } from './typography';
 
+export interface RenderControllerRequest {
+  readonly source: string;
+  readonly document: ReturnType<typeof parseMarkdown>;
+  readonly math: Extract<UIToPluginMessage, { type: 'RENDER_DOCUMENT' }>['math'];
+  readonly settings: Extract<UIToPluginMessage, { type: 'RENDER_DOCUMENT' }>['settings'];
+  readonly selectedSnapshot?: TextSelectionSnapshot;
+}
+export interface RenderControllerResult {
+  readonly rootName: string;
+}
 export interface SelectionControllerDependencies {
   readSelection(): Promise<SelectionSnapshotOutcome>;
   postToUi(message: PluginToUIMessage): void;
   closePlugin(): void;
+  renderDocument?(request: RenderControllerRequest): Promise<RenderControllerResult>;
   readonly defaults?: { readonly width?: number; readonly typography?: TypographyContext };
 }
-
 export interface SelectionController {
   initialize(): Promise<void>;
   selectionChanged(): Promise<void>;
   handleMessage(message: UIToPluginMessage): void;
-  /** Most recent clean snapshot, retained for a later non-destructive replacement flow. */
   readonly selectedSnapshot: TextSelectionSnapshot | undefined;
 }
-
 const fallbackStatus = (
   outcome: Exclude<SelectionSnapshotOutcome, { kind: 'selected' }>,
 ): string => {
@@ -36,26 +50,21 @@ const fallbackStatus = (
       return `Could not inherit the selected text: ${outcome.issue.message} Using defaults instead.`;
   }
 };
-
-/**
- * Coordinates asynchronous selection reads. A monotonically increasing request
- * id prevents a slow old font load from replacing a newer selection in the UI.
- */
+/** Selection reads and Apply renders are deliberately independent. Apply is single-flight. */
 export function createSelectionController(
   dependencies: SelectionControllerDependencies,
 ): SelectionController {
   let requestId = 0;
   let latestSnapshot: TextSelectionSnapshot | undefined;
+  let rendering = false;
   const defaults = {
     width: dependencies.defaults?.width ?? DEFAULT_PARAGRAPH_WIDTH,
     typography: dependencies.defaults?.typography ?? DEFAULT_TYPOGRAPHY,
   };
-
   const refresh = async (messageType: 'INITIALIZE' | 'SELECTION_CHANGED'): Promise<void> => {
     const id = ++requestId;
     const outcome = await dependencies.readSelection();
     if (id !== requestId) return;
-
     if (outcome.kind === 'selected') {
       latestSnapshot = outcome.snapshot;
       dependencies.postToUi({
@@ -67,7 +76,6 @@ export function createSelectionController(
       });
       return;
     }
-
     latestSnapshot = undefined;
     dependencies.postToUi({
       type: messageType,
@@ -76,7 +84,47 @@ export function createSelectionController(
       status: fallbackStatus(outcome),
     });
   };
-
+  const render = async (
+    message: Extract<UIToPluginMessage, { type: 'RENDER_DOCUMENT' }>,
+  ): Promise<void> => {
+    if (rendering) {
+      dependencies.postToUi({
+        type: 'RENDER_ERROR',
+        message: 'A render is already in progress. Wait for it to finish.',
+      });
+      return;
+    }
+    if (!dependencies.renderDocument) {
+      dependencies.postToUi({
+        type: 'RENDER_ERROR',
+        message: 'Document rendering is not configured.',
+      });
+      return;
+    }
+    rendering = true;
+    try {
+      // Reparse trusted canonical source at the controller boundary. The UI AST is never accepted.
+      if (!isRenderSettings(message.settings)) throw new Error('Render settings are invalid.');
+      const document = parseMarkdown(message.source);
+      validateRenderedMathPayloads(document, message.math);
+      const result = await dependencies.renderDocument({
+        source: message.source,
+        document,
+        math: message.math,
+        settings: message.settings,
+        selectedSnapshot: latestSnapshot,
+      });
+      dependencies.postToUi({ type: 'RENDER_SUCCESS', message: `Created ${result.rootName}.` });
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : 'Unknown rendering failure.';
+      dependencies.postToUi({
+        type: 'RENDER_ERROR',
+        message: `Could not render document: ${reason}`,
+      });
+    } finally {
+      rendering = false;
+    }
+  };
   return {
     initialize: () => refresh('INITIALIZE'),
     selectionChanged: () => refresh('SELECTION_CHANGED'),
@@ -89,14 +137,10 @@ export function createSelectionController(
           dependencies.closePlugin();
           return;
         case 'RENDER_DOCUMENT':
-          dependencies.postToUi({
-            type: 'RENDER_ERROR',
-            message:
-              'Document rendering is not available until the rendering workflow is implemented.',
-          });
+          void render(message);
       }
     },
-    get selectedSnapshot(): TextSelectionSnapshot | undefined {
+    get selectedSnapshot() {
       return latestSnapshot;
     },
   };
