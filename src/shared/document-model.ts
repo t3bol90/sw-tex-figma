@@ -6,6 +6,11 @@ export interface TextRun {
   readonly marks?: readonly TextMark[];
 }
 
+/** A hard Markdown break (`\\` or two trailing spaces) inside a paragraph. */
+export interface LineBreakRun {
+  readonly type: 'break';
+}
+
 export interface MathRun {
   readonly type: 'math';
   readonly latex: string;
@@ -22,6 +27,6 @@ export interface DisplayMathNode {
   readonly latex: string;
 }
 
-export type InlineRun = TextRun | MathRun;
+export type InlineRun = TextRun | LineBreakRun | MathRun;
 export type DocumentNode = ParagraphNode | DisplayMathNode;
 export type MathTextDocument = readonly DocumentNode[];
