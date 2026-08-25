@@ -1,4 +1,4 @@
-# Math Text: Native Markdown and LaTeX Typesetting for Figma
+# Math Text: Markdown and LaTeX Typesetting for Figma
 
 ![Code style: Prettier](https://img.shields.io/badge/code%20style-Prettier-F7B93E.svg)
 ![Lint: ESLint](https://img.shields.io/badge/lint-ESLint-4B32C3.svg)
