@@ -1,13 +1,19 @@
 import type { RenderedMathPayload, RenderSettings, TypographyContext } from './types';
 
+export type WorkflowMode = 'create' | 'edit' | 'reflow' | 'sync-typography';
+
 export type UIToPluginMessage =
   | {
       readonly type: 'RENDER_DOCUMENT';
       readonly source: string;
       readonly math: readonly RenderedMathPayload[];
       readonly settings: RenderSettings;
+      /** Controller-issued context generation; prevents delayed UI work using stale context. */
+      readonly workflowToken: number;
     }
   | { readonly type: 'REQUEST_SELECTION_STYLE' }
+  /** UI subscription acknowledgement; controller resends its current context. */
+  | { readonly type: 'REQUEST_INITIALIZATION' }
   | { readonly type: 'CLOSE' };
 
 export type PluginToUIMessage =
@@ -15,6 +21,12 @@ export type PluginToUIMessage =
       readonly type: 'INITIALIZE';
       readonly source?: string;
       readonly typography?: TypographyContext;
+      /** Complete controller-owned state. The UI never receives a replacement node id. */
+      readonly settings?: RenderSettings;
+      readonly workflow?: WorkflowMode;
+      readonly workflowToken?: number;
+      readonly autoApply?: boolean;
+      readonly canApply?: boolean;
       readonly width?: number;
       /** A non-destructive explanation of the selection/default state. */
       readonly status?: string;
@@ -23,6 +35,12 @@ export type PluginToUIMessage =
       readonly type: 'SELECTION_CHANGED';
       readonly source?: string;
       readonly typography?: TypographyContext;
+      /** Complete controller-owned state. The UI never receives a replacement node id. */
+      readonly settings?: RenderSettings;
+      readonly workflow?: WorkflowMode;
+      readonly workflowToken?: number;
+      readonly autoApply?: boolean;
+      readonly canApply?: boolean;
       readonly width?: number;
       /** A non-destructive explanation of the selection/default state. */
       readonly status?: string;
@@ -130,9 +148,13 @@ export const isUIToPluginMessage = (value: unknown): value is UIToPluginMessage 
         Array.isArray(value.math) &&
         value.math.length <= 1_000 &&
         value.math.every(isRenderedMathPayload) &&
-        isRenderSettings(value.settings)
+        isRenderSettings(value.settings) &&
+        typeof value.workflowToken === 'number' &&
+        Number.isInteger(value.workflowToken) &&
+        value.workflowToken >= 0
       );
     case 'REQUEST_SELECTION_STYLE':
+    case 'REQUEST_INITIALIZATION':
     case 'CLOSE':
       return Object.keys(value).length === 1;
     default:
@@ -146,7 +168,19 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
   const hasValidOptionalContext =
     (value.typography === undefined || isTypographyContext(value.typography)) &&
     (value.width === undefined || (isFiniteNumber(value.width) && value.width > 0)) &&
-    (value.status === undefined || isBoundedString(value.status, 10_000));
+    (value.status === undefined || isBoundedString(value.status, 10_000)) &&
+    (value.settings === undefined || isRenderSettings(value.settings)) &&
+    (value.workflow === undefined ||
+      value.workflow === 'create' ||
+      value.workflow === 'edit' ||
+      value.workflow === 'reflow' ||
+      value.workflow === 'sync-typography') &&
+    (value.workflowToken === undefined ||
+      (typeof value.workflowToken === 'number' &&
+        Number.isInteger(value.workflowToken) &&
+        value.workflowToken >= 0)) &&
+    (value.autoApply === undefined || typeof value.autoApply === 'boolean') &&
+    (value.canApply === undefined || typeof value.canApply === 'boolean');
 
   switch (value.type) {
     case 'INITIALIZE':

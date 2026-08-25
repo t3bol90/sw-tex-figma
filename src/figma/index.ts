@@ -10,3 +10,7 @@ export * from './math-svg-import';
 export * from './persistence';
 export * from './document-renderer';
 export * from './render-orchestrator';
+
+export * from './generated-target';
+export * from './replacement';
+export * from './workflow-controller';
