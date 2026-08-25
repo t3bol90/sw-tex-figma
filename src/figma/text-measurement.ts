@@ -23,12 +23,12 @@ export interface TextMeasurementRequest {
 
 /** Narrow injectable view of a temporary Figma TextNode. */
 export interface FigmaMeasurementTextNode {
-  fontName: FontDescriptor;
-  fontSize: number;
-  lineHeight: TypographyContext['lineHeight'];
-  letterSpacing: TypographyContext['letterSpacing'];
-  fills: TypographyContext['fills'];
-  textAutoResize?: 'WIDTH_AND_HEIGHT';
+  fontName: unknown;
+  fontSize: unknown;
+  lineHeight: unknown;
+  letterSpacing: unknown;
+  fills: unknown;
+  textAutoResize?: unknown;
   characters: string;
   readonly width: number;
   readonly height: number;

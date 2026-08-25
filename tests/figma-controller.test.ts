@@ -89,3 +89,61 @@ describe('selection controller', () => {
     });
   });
 });
+
+const renderMessage = (source = '') => ({
+  type: 'RENDER_DOCUMENT' as const,
+  source,
+  math: [],
+  settings: {
+    width: 100,
+    mathScale: 1,
+    inheritTypography: true,
+    typography: {
+      fontName: { family: 'Inter', style: 'Regular' },
+      fontSize: 16,
+      lineHeight: { unit: 'AUTO' as const },
+      letterSpacing: { unit: 'PIXELS' as const, value: 0 },
+      fills: [],
+    },
+  },
+});
+
+describe('render controller', () => {
+  it('reparses source, emits success, rejects mismatched payload, and is single-flight', async () => {
+    const messages: unknown[] = [];
+    const pending = deferred<{ rootName: string }>();
+    let calls = 0;
+    const controller = createSelectionController({
+      readSelection: async () => ({ kind: 'no-selection' }),
+      postToUi: (message) => messages.push(message),
+      closePlugin: () => undefined,
+      renderDocument: async (request) => {
+        calls += 1;
+        expect(request.document).toEqual([]);
+        return pending.promise;
+      },
+    });
+    controller.handleMessage(renderMessage());
+    controller.handleMessage(renderMessage());
+    expect(calls).toBe(1);
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: 'RENDER_ERROR',
+        message: expect.stringContaining('already'),
+      }),
+    );
+    pending.resolve({ rootName: 'Math Document' });
+    await pending.promise;
+    for (let index = 0; index < 4; index += 1) await Promise.resolve();
+    expect(messages[1]).toMatchObject({
+      type: 'RENDER_SUCCESS',
+      message: 'Created Math Document.',
+    });
+    controller.handleMessage({ ...renderMessage('text $x$'), math: [] });
+    await Promise.resolve();
+    expect(messages.at(-1)).toMatchObject({
+      type: 'RENDER_ERROR',
+      message: expect.stringContaining('Missing rendered math'),
+    });
+  });
+});
