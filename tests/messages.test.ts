@@ -36,6 +36,27 @@ describe('runtime message guards', () => {
     expect(isUIToPluginMessage(message)).toBe(true);
   });
 
+  it('accepts a no-math render request and rejects inconsistent baseline metrics', () => {
+    expect(
+      isUIToPluginMessage({ type: 'RENDER_DOCUMENT', source: 'Plain text', settings, math: [] }),
+    ).toBe(true);
+    expect(
+      isUIToPluginMessage({
+        type: 'RENDER_DOCUMENT',
+        source: 'x',
+        settings,
+        math: [
+          {
+            latex: 'x',
+            svg: '<svg/>',
+            display: false,
+            metrics: { width: 1, height: 2, ascent: 1, descent: 0, baseline: 1 },
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
   it('rejects malformed UI messages instead of trusting their discriminant', () => {
     expect(isUIToPluginMessage({ type: 'RENDER_DOCUMENT' })).toBe(false);
     expect(isUIToPluginMessage({ type: 'CLOSE', extra: true })).toBe(false);

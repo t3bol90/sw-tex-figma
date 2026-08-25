@@ -49,6 +49,9 @@ function inlineUiAssets(): Plugin {
       writeFileSync(resolve(outputDirectory, 'ui.html'), html);
       if (sourceHtmlPath !== resolve(outputDirectory, 'ui.html')) rmSync(sourceHtmlPath);
       for (const assetPath of usedAssets) rmSync(assetPath);
+      // Vite leaves these empty staging folders after inline assembly; Figma only needs two files.
+      rmSync(resolve(outputDirectory, 'assets'), { recursive: true, force: true });
+      rmSync(resolve(outputDirectory, 'src'), { recursive: true, force: true });
     },
   };
 }
@@ -78,6 +81,8 @@ export default defineConfig(({ mode }) => {
     build: {
       emptyOutDir: true,
       outDir: dist,
+      // The one-file Figma iframe deliberately embeds MathJax and local SVG font tables.
+      chunkSizeWarningLimit: 13_000,
       rollupOptions: {
         input: resolve(root, 'src/ui.html'),
         output: {

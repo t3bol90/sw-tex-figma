@@ -108,7 +108,10 @@ const isRenderedMathPayload = (value: unknown): value is RenderedMathPayload =>
   isFiniteNumber(value.metrics.descent) &&
   value.metrics.descent >= 0 &&
   isFiniteNumber(value.metrics.baseline) &&
-  value.metrics.baseline >= 0;
+  value.metrics.baseline >= 0 &&
+  value.metrics.baseline === value.metrics.ascent &&
+  Math.abs(value.metrics.height - (value.metrics.ascent + value.metrics.descent)) <=
+    1e-6 * Math.max(1, value.metrics.height);
 
 export const isUIToPluginMessage = (value: unknown): value is UIToPluginMessage => {
   if (!isRecord(value) || typeof value.type !== 'string') return false;
