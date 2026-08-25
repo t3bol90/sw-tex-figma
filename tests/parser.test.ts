@@ -23,6 +23,12 @@ describe('parseMarkdown', () => {
     );
   });
 
+  it('decodes named character entities with the worker-safe parser dependency export', () => {
+    expect(parseMarkdown('A &copy; B &amp; C')).toEqual(
+      document([{ type: 'paragraph', children: [{ type: 'text', value: 'A © B & C' }] }]),
+    );
+  });
+
   it('keeps every contiguous inline expression as one atomic math run', () => {
     expect(parseMarkdown(String.raw`The result is $y = \alpha x^2 + \beta$.`)).toEqual(
       document([

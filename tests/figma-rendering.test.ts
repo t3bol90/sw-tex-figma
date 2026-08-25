@@ -159,7 +159,7 @@ describe('Figma document rendering', () => {
     expect(parsePersistedDocumentState(root.getPluginData('math-text-document'))?.source).toBe(
       'hello $x$',
     );
-    expect(root.getPluginData('math-text-version')).toBe('1');
+    expect(root.getPluginData('math-text-version')).toBe('2');
     expect(root.relaunch).toEqual({ edit: 'Edit Math Text' });
   });
   it('uses line-relative child coordinates so second-line absolute baselines stay correct', async () => {

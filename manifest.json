@@ -1,5 +1,6 @@
 {
   "name": "Math Text",
+  "id": "1673896435619981207",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "dist/ui.html",
@@ -20,6 +21,10 @@
     {
       "name": "Reflow Selected",
       "command": "reflow"
+    },
+    {
+      "name": "Sync Typography",
+      "command": "sync-typography"
     }
   ],
   "relaunchButtons": [
