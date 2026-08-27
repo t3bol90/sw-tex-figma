@@ -4,7 +4,7 @@
 ![Lint: ESLint](https://img.shields.io/badge/lint-ESLint-4B32C3.svg)
 ![Tests: Vitest](https://img.shields.io/badge/tests-Vitest-6E9F18.svg)
 
-**Community plugin (under review):** [Math Text on Figma Community](https://www.figma.com/community/plugin/1673896435619981207)
+**Community plugin:** [Math Text on Figma Community](https://www.figma.com/community/plugin/1673896435619981207)
 
 Math Text is a local-first Figma plugin for typesetting Markdown prose and LaTeX mathematics as one visually coherent document. Prose remains editable as native Figma text, while each delimited mathematical expression is rendered as one atomic MathJax SVG with expression-specific metrics.
 
