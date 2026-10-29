@@ -40,6 +40,10 @@ class MockNode {
     this.width = width;
     this.height = height;
   }
+  public resizeWithoutConstraints(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
+  }
   public remove(): void {
     this.removed = true;
   }

@@ -15,10 +15,12 @@ import {
   type WorkflowTarget,
 } from './figma';
 import { readPersistedDocumentState } from './figma/persistence';
+import { captureSlideDestination } from './figma/slides-destination';
+import { createSettingsPreferences } from './figma/settings-preferences';
 import { isUIToPluginMessage, type PluginToUIMessage, type WorkflowMode } from './shared/messages';
 
 declare const __html__: string;
-const UI_SIZE = { width: 440, height: 620 };
+const UI_SIZE = { width: 680, height: 580 };
 const postToUi = (message: PluginToUIMessage): void => {
   figma.ui.postMessage(message);
 };
@@ -49,6 +51,7 @@ const renderApi: FigmaRenderApi = {
     return figma.currentPage;
   },
   viewport: figma.viewport,
+  constructionOrigin: figma.editorType === 'slides' ? { x: 0, y: 0 } : undefined,
 };
 const renderer = new FigmaRenderOrchestrator(renderApi);
 const widthOf = (node: GeneratedSceneNode): number | undefined =>
@@ -84,7 +87,8 @@ const renderCreate = async (
   const selected = request.selectedSnapshot;
   const selectedNode = selected ? selectedSnapshotNode(selected) : undefined;
   if (!selected || !selectedNode) {
-    const result = await renderer.render(request);
+    const destination = captureSlideDestination(figma, renderApi.appendChild);
+    const result = await renderer.render(request, destination);
     return { rootName: result.root.name };
   }
   const replacementNode = replacementNodeFor(selectedNode);
@@ -102,6 +106,7 @@ const renderCreate = async (
   return { rootName: result.root.name, consumedSelectedSnapshot: true };
 };
 const controller = createWorkflowController({
+  preferences: createSettingsPreferences(figma.clientStorage),
   mode: command,
   availableFonts: listAvailableFonts,
   readSelection: () =>

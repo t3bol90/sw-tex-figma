@@ -10,6 +10,7 @@ import { SourceEditor } from './SourceEditor';
 import { AutoApplyGate } from './auto-apply-gate';
 import { ApplyEpochGate } from './apply-epoch';
 import { hexToRgb, rgbToHex } from './color';
+import { PreferenceSession } from './preference-session';
 
 const INITIAL_SOURCE = String.raw`Write Markdown with inline math such as $\alpha + \beta$.`;
 const DEFAULT_SETTINGS: RenderSettings = {
@@ -93,6 +94,12 @@ export function App() {
   const [source, setSource] = useState(INITIAL_SOURCE);
   const [status, setStatus] = useState('Initializing…');
   const [settings, setSettings] = useState<RenderSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
+  const preferences = useRef(new PreferenceSession());
+  const [preferencesStatus, setPreferencesStatus] = useState(
+    'Changes are remembered for next time.',
+  );
+  const pendingFamily = useRef(false);
   const [context, setContext] = useState<Context>(INITIAL_CONTEXT);
   const [fontFamilies, setFontFamilies] = useState<readonly string[]>([]);
   const [familyStyles, setFamilyStyles] = useState<readonly string[]>([]);
@@ -123,6 +130,24 @@ export function App() {
     // Allow a newer request to start; the old finally is epoch-guarded below.
     setIsApplying(false);
   }, []);
+  const updateSettings = useCallback(
+    (update: (old: RenderSettings) => RenderSettings, remember = true): void => {
+      const next = update(settingsRef.current);
+      if (next !== settingsRef.current) {
+        settingsRef.current = next;
+        setSettings(next);
+        invalidateApply();
+      }
+      if (remember) {
+        const message = preferences.current.change(next);
+        if (message) {
+          setPreferencesStatus('Saving settings…');
+          postToPlugin(message);
+        }
+      }
+    },
+    [invalidateApply],
+  );
 
   useEffect(() => {
     selectedFamilyRef.current = selectedFamily;
@@ -141,6 +166,15 @@ export function App() {
           ? (event.data as { pluginMessage?: unknown }).pluginMessage
           : undefined;
       if (!isPluginToUIMessage(candidate)) return;
+      if (candidate.type === 'PREFERENCES_SAVED' || candidate.type === 'PREFERENCES_ERROR') {
+        if (!pendingFamily.current && preferences.current.accepts(candidate))
+          setPreferencesStatus(
+            candidate.type === 'PREFERENCES_SAVED'
+              ? 'Saved for next time.'
+              : 'Could not save settings. Changes still apply here.',
+          );
+        return;
+      }
       if (candidate.type === 'AVAILABLE_FONT_FAMILIES') {
         setFontFamilies(candidate.families);
         setFontStatus(candidate.status);
@@ -150,36 +184,49 @@ export function App() {
         if (candidate.family === selectedFamilyRef.current) {
           setFamilyStyles(candidate.styles);
           setFontStatus(candidate.status);
-          setSettings(
-            (old) =>
-              settingsFromFontStyles(
-                old,
-                selectedFamilyRef.current,
-                candidate.family,
-                candidate.styles,
-              ) ?? old,
+          const next = settingsFromFontStyles(
+            settingsRef.current,
+            selectedFamilyRef.current,
+            candidate.family,
+            candidate.styles,
           );
+          if (next) {
+            updateSettings(() => next, pendingFamily.current);
+            pendingFamily.current = false;
+          } else if (pendingFamily.current) {
+            pendingFamily.current = false;
+            selectedFamilyRef.current = settingsRef.current.typography.fontName.family;
+            setSelectedFamily(selectedFamilyRef.current);
+            setPreferencesStatus('Could not load font styles. The previous font is kept.');
+          }
         }
         return;
       }
       if (candidate.type === 'INITIALIZE' || candidate.type === 'SELECTION_CHANGED') {
+        const nextContext = contextFromInitialization(candidate);
+        if (nextContext.token > 0 && !preferences.current.initialize(nextContext.token)) return;
+        pendingFamily.current = false;
         if (candidate.source !== undefined) {
           invalidateApply();
           setSource(candidate.source);
         }
         if (candidate.settings !== undefined) {
           invalidateApply();
+          settingsRef.current = candidate.settings;
           setSettings(candidate.settings);
           selectedFamilyRef.current = candidate.settings.typography.fontName.family;
           setSelectedFamily(candidate.settings.typography.fontName.family);
         } else if (candidate.width !== undefined || candidate.typography !== undefined)
-          setSettings((old) => ({
-            ...old,
-            ...(candidate.width === undefined ? {} : { width: candidate.width }),
-            ...(candidate.typography === undefined ? {} : { typography: candidate.typography }),
-          }));
+          updateSettings(
+            (old) => ({
+              ...old,
+              ...(candidate.width === undefined ? {} : { width: candidate.width }),
+              ...(candidate.typography === undefined ? {} : { typography: candidate.typography }),
+            }),
+            false,
+          );
         invalidateApply();
-        setContext(contextFromInitialization(candidate));
+        setContext(nextContext);
         setStatus(candidate.status ?? 'Ready. Apply parses and renders all math locally.');
       } else setStatus(candidate.message);
     };
@@ -187,11 +234,17 @@ export function App() {
     // This is an acknowledgement/resume request, not a request to choose a target in locked modes.
     postToPlugin({ type: 'REQUEST_INITIALIZATION' });
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [invalidateApply, updateSettings]);
 
   const apply = useCallback(
     async (auto = false): Promise<void> => {
-      if (!context.canApply || isApplying) return;
+      if (
+        !context.canApply ||
+        isApplying ||
+        pendingFamily.current ||
+        selectedFamilyRef.current !== settings.typography.fontName.family
+      )
+        return;
       const epoch = applyEpoch.current.begin();
       setIsApplying(true);
       setStatus(
@@ -241,185 +294,208 @@ export function App() {
         <h1>Math Text</h1>
         <p>Markdown and LaTeX source</p>
       </header>
-      <label id="source-label">Source</label>
-      <SourceEditor
-        value={source}
-        onChange={(value) => {
-          invalidateApply();
-          setSource(value);
-        }}
-      />
-      <section className="controls" aria-label="Layout controls">
-        <label>
-          Width (px)
-          <input
-            type="number"
-            min="1"
-            max="100000"
-            step="1"
-            value={settings.width}
-            onChange={(event) => {
-              const width = Number(event.target.value);
-              if (Number.isFinite(width) && width >= 1 && width <= 100000) {
-                invalidateApply();
-                setSettings((old) => ({ ...old, width }));
-              }
+      <div className="workspace">
+        <section className="source-pane" aria-labelledby="source-label">
+          <label id="source-label">Source</label>
+          <SourceEditor
+            value={source}
+            onChange={(value) => {
+              invalidateApply();
+              setSource(value);
             }}
           />
-        </label>
-        <label>
-          <span>Search font families</span>
-          <input
-            type="search"
-            aria-label="Search font families"
-            placeholder="Search font families"
-            value={familyQuery}
-            onChange={(event) => setFamilyQuery(event.target.value)}
-          />
-          <span>Font family</span>
-          <select
-            aria-label="Font family"
-            value={selectedFamily}
-            onChange={(event) => {
-              const family = event.target.value;
-              if (family) {
-                invalidateApply();
-                // Do not let stale styles from the prior family form an invalid pair.
-                setFamilyStyles([]);
-                selectedFamilyRef.current = family;
-                setSelectedFamily(family);
-              }
-            }}
-          >
-            {visibleFontFamilies.map((family) => (
-              <option key={family} value={family}>
-                {family}
-              </option>
-            ))}
-          </select>
-          {!hasFamilySearchMatch && familyQuery.trim().length > 0 ? (
-            <span className="control-status">
-              No matching families. Current selection remains available.
-            </span>
-          ) : null}
-        </label>
-        <label>
-          Font style
-          <select
-            value={settings.typography.fontName.style}
-            onChange={(event) => {
-              const style = event.target.value;
-              if (familyStyles.includes(style)) {
-                invalidateApply();
-                setSettings((old) => ({
-                  ...old,
-                  typography: { ...old.typography, fontName: { family: selectedFamily, style } },
-                  mathScale: 1,
-                }));
-              }
-            }}
-          >
-            <option value={settings.typography.fontName.style}>
-              {settings.typography.fontName.style}
-            </option>
-            {familyStyles
-              .filter((style) => style !== settings.typography.fontName.style)
-              .map((style) => (
-                <option key={style} value={style}>
-                  {style}
-                </option>
-              ))}
-          </select>
-          {fontStatus ? <span className="control-status">{fontStatus}</span> : null}
-        </label>
-        <label>
-          Font size (px)
-          <input
-            type="number"
-            min="1"
-            max="512"
-            step="1"
-            value={settings.typography.fontSize}
-            onChange={(event) => {
-              const fontSize = Number(event.target.value);
-              if (Number.isFinite(fontSize) && fontSize >= 1 && fontSize <= 512) {
-                invalidateApply();
-                setSettings((old) => ({
-                  ...old,
-                  mathScale: 1,
-                  typography: { ...old.typography, fontSize },
-                }));
-              }
-            }}
-          />
-        </label>
-        <label>
-          Text color
-          <input
-            type="color"
-            value={rgbToHex(settings.typography.fills[0]?.color ?? { r: 0, g: 0, b: 0 })}
-            onChange={(event) => {
-              const color = hexToRgb(event.target.value);
-              if (color) {
-                invalidateApply();
-                setSettings((old) => ({
-                  ...old,
-                  typography: {
-                    ...old.typography,
-                    fills: [
-                      {
-                        type: 'SOLID',
-                        color,
-                        ...(old.typography.fills[0]?.opacity === undefined
-                          ? {}
-                          : { opacity: old.typography.fills[0].opacity }),
+          <p className="source-hint">Use $…$ for inline math and $$…$$ for equations.</p>
+        </section>
+        <aside className="settings-pane" aria-label="Settings">
+          <h2>Settings</h2>
+          <fieldset className="controls" aria-label="Layout controls" disabled={!context.canApply}>
+            <label className="width-control">
+              Width (px)
+              <input
+                type="number"
+                min="1"
+                max="100000"
+                step="1"
+                value={settings.width}
+                onChange={(event) => {
+                  const width = Number(event.target.value);
+                  if (Number.isFinite(width) && width >= 1 && width <= 100000) {
+                    updateSettings((old) => ({ ...old, width }));
+                  }
+                }}
+              />
+            </label>
+            <label className="alignment-control">
+              Text alignment
+              <select
+                value={settings.textAlignment}
+                onChange={(event) => {
+                  const textAlignment = event.target.value;
+                  if (
+                    textAlignment === 'left' ||
+                    textAlignment === 'center' ||
+                    textAlignment === 'right' ||
+                    textAlignment === 'justify'
+                  ) {
+                    updateSettings((old) => ({ ...old, textAlignment }));
+                  }
+                }}
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+                <option value="justify">Justify</option>
+              </select>
+            </label>
+            <label className="family-control">
+              <span>Search font families</span>
+              <input
+                type="search"
+                aria-label="Search font families"
+                placeholder="Search font families"
+                value={familyQuery}
+                onChange={(event) => setFamilyQuery(event.target.value)}
+              />
+              <span>Font family</span>
+              <select
+                aria-label="Font family"
+                value={selectedFamily}
+                onChange={(event) => {
+                  const family = event.target.value;
+                  if (family) {
+                    invalidateApply();
+                    // Do not let stale styles from the prior family form an invalid pair.
+                    setFamilyStyles([]);
+                    pendingFamily.current = true;
+                    setPreferencesStatus('Loading font styles…');
+                    selectedFamilyRef.current = family;
+                    setSelectedFamily(family);
+                  }
+                }}
+              >
+                {visibleFontFamilies.map((family) => (
+                  <option key={family} value={family}>
+                    {family}
+                  </option>
+                ))}
+              </select>
+              {!hasFamilySearchMatch && familyQuery.trim().length > 0 ? (
+                <span className="control-status">
+                  No matching families. Current selection remains available.
+                </span>
+              ) : null}
+            </label>
+            <label className="style-control">
+              Font style
+              <select
+                value={settings.typography.fontName.style}
+                onChange={(event) => {
+                  const style = event.target.value;
+                  if (familyStyles.includes(style)) {
+                    pendingFamily.current = false;
+                    updateSettings((old) => ({
+                      ...old,
+                      typography: {
+                        ...old.typography,
+                        fontName: { family: selectedFamily, style },
                       },
-                    ],
-                  },
-                }));
-              }
-            }}
-          />
-        </label>
-        <label>
-          Text alignment
-          <select
-            value={settings.textAlignment}
-            onChange={(event) => {
-              const textAlignment = event.target.value;
-              if (
-                textAlignment === 'left' ||
-                textAlignment === 'center' ||
-                textAlignment === 'right' ||
-                textAlignment === 'justify'
-              ) {
-                invalidateApply();
-                setSettings((old) => ({ ...old, textAlignment }));
-              }
-            }}
-          >
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-            <option value="justify">Justify</option>
-          </select>
-        </label>
-      </section>
-      <p className="status" aria-live="polite">
-        {status}
-      </p>
+                      mathScale: 1,
+                    }));
+                  }
+                }}
+              >
+                <option value={settings.typography.fontName.style}>
+                  {settings.typography.fontName.style}
+                </option>
+                {familyStyles
+                  .filter((style) => style !== settings.typography.fontName.style)
+                  .map((style) => (
+                    <option key={style} value={style}>
+                      {style}
+                    </option>
+                  ))}
+              </select>
+              {fontStatus ? <span className="control-status">{fontStatus}</span> : null}
+            </label>
+            <label className="size-control">
+              Font size (px)
+              <input
+                type="number"
+                min="1"
+                max="512"
+                step="1"
+                value={settings.typography.fontSize}
+                onChange={(event) => {
+                  const fontSize = Number(event.target.value);
+                  if (Number.isFinite(fontSize) && fontSize >= 1 && fontSize <= 512) {
+                    updateSettings((old) => ({
+                      ...old,
+                      mathScale: 1,
+                      typography: { ...old.typography, fontSize },
+                    }));
+                  }
+                }}
+              />
+            </label>
+            <label className="color-control">
+              Text color
+              <input
+                type="color"
+                value={rgbToHex(settings.typography.fills[0]?.color ?? { r: 0, g: 0, b: 0 })}
+                onChange={(event) => {
+                  const color = hexToRgb(event.target.value);
+                  if (color) {
+                    updateSettings((old) => ({
+                      ...old,
+                      typography: {
+                        ...old.typography,
+                        fills: [
+                          {
+                            type: 'SOLID',
+                            color,
+                            ...(old.typography.fills[0]?.opacity === undefined
+                              ? {}
+                              : { opacity: old.typography.fills[0].opacity }),
+                          },
+                        ],
+                      },
+                    }));
+                  }
+                }}
+              />
+            </label>
+          </fieldset>
+          <p className="preferences-status" aria-live="polite">
+            {preferencesStatus}
+          </p>
+        </aside>
+      </div>
       <footer>
-        <button type="button" onClick={() => postToPlugin({ type: 'CLOSE' })}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="primary"
-          disabled={isApplying || !context.canApply}
-          onClick={() => void apply()}
-        >
-          {isApplying ? 'Rendering…' : buttonLabel}
-        </button>
+        <p className="status" aria-live="polite">
+          {status}
+        </p>
+        <div className="actions">
+          <button
+            type="button"
+            disabled={pendingFamily.current}
+            onClick={() => postToPlugin({ type: 'CLOSE' })}
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            className="primary"
+            disabled={
+              isApplying ||
+              !context.canApply ||
+              pendingFamily.current ||
+              selectedFamily !== settings.typography.fontName.family
+            }
+            onClick={() => void apply()}
+          >
+            {isApplying ? 'Rendering…' : buttonLabel}
+          </button>
+        </div>
       </footer>
     </main>
   );

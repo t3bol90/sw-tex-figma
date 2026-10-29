@@ -14,6 +14,7 @@ import type { GeneratedSceneNode } from './generated-target';
 import type { SelectionSnapshotOutcome, TextSelectionSnapshot } from './selection';
 import { DEFAULT_PARAGRAPH_WIDTH } from './selection';
 import { DEFAULT_TYPOGRAPHY } from './typography';
+import type { SettingsPreferences } from './settings-preferences';
 
 /** A controller-held node reference; this identity never crosses the iframe boundary. */
 export interface WorkflowTarget {
@@ -47,6 +48,7 @@ export interface WorkflowControllerDependencies {
   postToUi(message: PluginToUIMessage): void;
   closePlugin(): void;
   readonly defaults?: { readonly width?: number; readonly typography?: TypographyContext };
+  readonly preferences?: SettingsPreferences;
 }
 export interface WorkflowController {
   initialize(): Promise<void>;
@@ -70,7 +72,7 @@ const statusForSelection = (
 ): string => {
   switch (outcome.kind) {
     case 'no-selection':
-      return 'No text layer is selected. The result will be inserted near the viewport center.';
+      return 'No text layer is selected. Apply creates a new result.';
     case 'multiple-selection':
       return 'Select exactly one supported text layer to replace it; otherwise Apply creates a new result.';
     case 'non-text-selection':
@@ -98,6 +100,8 @@ export function createWorkflowController(
   let target: WorkflowTarget | undefined;
   let generation = 0;
   let rendering = false;
+  let preferenceRevision = 0;
+  let closing = false;
   let lastContext: ContextMessage | undefined;
   let fontLoad: Promise<void> | undefined;
   /** Retained so an early pre-iframe post can be replayed without refetching. */
@@ -106,6 +110,7 @@ export function createWorkflowController(
   let cachedFontInventory: readonly FontDescriptor[] | undefined;
   const postContext = (type: ContextMessage['type'], payload: ContextPayload): void => {
     const message = messageFor(type, payload);
+    if (message.workflowToken !== lastContext?.workflowToken) preferenceRevision = 0;
     lastContext = message;
     dependencies.postToUi(message);
   };
@@ -206,7 +211,8 @@ export function createWorkflowController(
       return;
     }
     latestSnapshot = undefined;
-    const settings = defaultsFor(dependencies);
+    const settings = (await dependencies.preferences?.read()) ?? defaultsFor(dependencies);
+    if (request !== generation || rendering) return;
     postContext(type, {
       width: settings.width,
       typography: settings.typography,
@@ -363,8 +369,29 @@ export function createWorkflowController(
     // never overwrite an in-progress Create editor or replacement snapshot.
     selectionChanged: async () => undefined,
     handleMessage: (message) => {
-      if (message.type === 'CLOSE') dependencies.closePlugin();
-      else if (message.type === 'REQUEST_FONT_STYLES') {
+      if (closing) return;
+      if (message.type === 'CLOSE') {
+        closing = true;
+        if (dependencies.preferences)
+          void dependencies.preferences.flush().then(() => dependencies.closePlugin());
+        else dependencies.closePlugin();
+      } else if (message.type === 'SAVE_PREFERENCES') {
+        if (
+          !lastContext ||
+          message.workflowToken !== generation ||
+          message.revision <= preferenceRevision
+        )
+          return;
+        preferenceRevision = message.revision;
+        const { workflowToken, revision } = message;
+        const save =
+          dependencies.preferences?.save(message.settings) ??
+          Promise.reject(new Error('Preferences are unavailable.'));
+        void save.then(
+          () => dependencies.postToUi({ type: 'PREFERENCES_SAVED', workflowToken, revision }),
+          () => dependencies.postToUi({ type: 'PREFERENCES_ERROR', workflowToken, revision }),
+        );
+      } else if (message.type === 'REQUEST_FONT_STYLES') {
         postFontStyles(message.family);
       } else if (
         message.type === 'REQUEST_SELECTION_STYLE' ||

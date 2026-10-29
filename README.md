@@ -24,6 +24,7 @@ _Figure 1. Math Text rendering an academic theorem with native Roboto Condensed 
 - Markdown source editing with CodeMirror.
 - Left, center, right, and justified paragraph alignment.
 - Font-family search using fonts returned by Figma.
+- Remembered width, typography, color, and alignment between plugin sessions.
 - Transactional replacement and versioned source persistence.
 - Editing through the **Edit Math Text** relaunch action on generated documents.
 - Offline operation with no backend or remote asset requests.
@@ -63,6 +64,17 @@ $$
 ```
 
 Configure the document width, Figma font family and style, font size, text color, and alignment. Then select **Apply**.
+
+Formatting changes are saved locally for your next new document, including when
+you close without applying. The settings panel shows when saving completes.
+Selected text supplies its own typography and width. Existing Math Text documents
+restore their saved settings without replacing your defaults merely by opening them.
+
+In **Figma Slides**, open a slide in single-slide view before applying. In grid view,
+select one slide or content belonging to one slide. New results are centered inside
+that slide. Selecting content on multiple slides produces a selection error.
+Converting a selected text layer or editing a generated document preserves its
+existing parent and position.
 
 To edit an existing result, select the generated Math Text document and use its **Edit Math Text** relaunch action. The plugin restores the canonical source and saved settings. Applying changed source, width, or typography performs a complete measured reflow.
 

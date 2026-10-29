@@ -86,6 +86,12 @@ layer. The **Edit Math Text** relaunch action opens the saved document for
 direct editing. Reflow and typography-sync workflows operate on a validated,
 controller-locked generated document.
 
+New documents without selected text use formatting preferences from
+`figma.clientStorage`. The controller validates the versioned record before
+initialization. Deliberate settings changes use ordered writes and acknowledged
+revisions. The Close action waits for pending writes. Restoring a document or a
+native text selection does not save preferences by itself.
+
 ## Source tree
 
 ```text

@@ -99,6 +99,18 @@ never changes the selected break, source order, or math/mark boundaries.
 
 Break decisions still use Figma measurements of tokenizer fragments, so a render cannot silently reflow source order. After each compatible merged prose segment is created, the renderer uses that final native `TextNode.width` (including Figma kerning and letter spacing) as the line cursor advance. Every later math/prose child on that line is positioned from that actual cursor. The Line, Paragraph, and root frame widths are then resized from actual child extents and persisted as `compiledWidth`; transparent frames never clip overflow.
 
+Layout containers use `resizeWithoutConstraints` so sizing their bounds preserves
+the measured text and math geometry. Figma's ordinary `resize` applies child
+constraints recursively and can stretch or shrink already positioned content.
+SVG import retains its intentional `resize` to scale the equation itself once.
+
+Slides construction starts at a slide-local origin before any prose is attached.
+Live testing showed that a canvas-coordinate origin can place the unfinished
+document outside the slide. After a layout tick, Slides converts affected
+auto-width text to auto-height with invalid widths. Moving the completed document
+back inside the slide does not restore that text. Final centering or replacement
+placement happens after construction at the safe origin.
+
 Vertical placement uses each exact MathJax ascent and a typography-keyed reference-glyph calibration for prose. The final native text height is recalibrated before a line's max ascent/descent is taken. This changes later line coordinates only through their actual preceding line height, never through a fixed centering offset.
 
 ## MathJax fragment normalization

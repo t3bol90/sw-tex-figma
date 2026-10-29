@@ -19,7 +19,7 @@ export interface FigmaFrameNode extends PluginDataNode {
   rotation?: number;
   readonly width: number;
   readonly height: number;
-  resize(width: number, height: number): void;
+  resizeWithoutConstraints(width: number, height: number): void;
   remove(): void;
 }
 export interface FigmaDocumentRendererApi extends FigmaProseApi, FigmaSvgApi {
@@ -132,7 +132,7 @@ export async function renderDocumentLayers(
   root.layoutMode = 'NONE';
   root.clipsContent = false;
   root.fills = [];
-  root.resize(positive(initial.width), positive(initial.height));
+  root.resizeWithoutConstraints(positive(initial.width), positive(initial.height));
   root.x = input.x;
   root.y = input.y;
   root.rotation = input.rotation ?? 0;
@@ -180,7 +180,7 @@ export async function renderDocumentLayers(
         block.displayMetricsWidth,
       );
   }
-  root.resize(positive(actualWidth), positive(actualHeight));
+  root.resizeWithoutConstraints(positive(actualWidth), positive(actualHeight));
   // Persist actual compiled width, not requested width or fragment-sum width.
   persistDocumentState(root, input.source, input.settings, root.width);
   return root;
@@ -219,7 +219,7 @@ async function renderParagraph(
   }
   // The root may expand after later blocks are reconciled. Final x positions are
   // assigned by renderDocumentLayers against that final root width.
-  frame.resize(positive(width), positive(lineTop));
+  frame.resizeWithoutConstraints(positive(width), positive(lineTop));
   return { frame, width, height: lineTop, lines: renderedLines };
 }
 
@@ -311,7 +311,7 @@ async function renderLine(
     cursor += child.metrics.width + (child.justifyGapAfter ? extraPerGap : 0);
   }
   const height = ascent + descent;
-  frame.resize(positive(cursor), positive(height));
+  frame.resizeWithoutConstraints(positive(cursor), positive(height));
   return { frame, width: cursor, height };
 }
 
@@ -330,7 +330,7 @@ function renderDisplay(
   frame.layoutMode = 'NONE';
   frame.clipsContent = false;
   frame.fills = [];
-  frame.resize(positive(width), positive(plan.metrics.height));
+  frame.resizeWithoutConstraints(positive(width), positive(plan.metrics.height));
   frame.x = 0;
   frame.y = top;
   api.appendChild(root, frame);

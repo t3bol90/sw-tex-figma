@@ -21,6 +21,12 @@ export type UIToPluginMessage =
   | { readonly type: 'REQUEST_INITIALIZATION' }
   /** Request exact styles only for one family from the controller-owned inventory. */
   | { readonly type: 'REQUEST_FONT_STYLES'; readonly family: string }
+  | {
+      readonly type: 'SAVE_PREFERENCES';
+      readonly settings: RenderSettings;
+      readonly workflowToken: number;
+      readonly revision: number;
+    }
   | { readonly type: 'CLOSE' };
 
 export type PluginToUIMessage =
@@ -68,7 +74,17 @@ export type PluginToUIMessage =
       readonly status?: string;
     }
   | { readonly type: 'RENDER_ERROR'; readonly message: string }
-  | { readonly type: 'RENDER_SUCCESS'; readonly message: string };
+  | { readonly type: 'RENDER_SUCCESS'; readonly message: string }
+  | {
+      readonly type: 'PREFERENCES_SAVED';
+      readonly workflowToken: number;
+      readonly revision: number;
+    }
+  | {
+      readonly type: 'PREFERENCES_ERROR';
+      readonly workflowToken: number;
+      readonly revision: number;
+    };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -88,6 +104,8 @@ export const MAX_FONT_FAMILIES = 20_000;
 export const MAX_FONT_STYLES = 5000;
 export const MIN_FONT_SIZE = 1;
 export const MAX_FONT_SIZE = 512;
+const isPositiveInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 
 export const isFontDescriptor = (value: unknown): value is FontDescriptor =>
   isRecord(value) &&
@@ -181,6 +199,13 @@ export const isUIToPluginMessage = (value: unknown): value is UIToPluginMessage 
   if (!isRecord(value) || typeof value.type !== 'string') return false;
 
   switch (value.type) {
+    case 'SAVE_PREFERENCES':
+      return (
+        Object.keys(value).length === 4 &&
+        isRenderSettings(value.settings) &&
+        isPositiveInteger(value.workflowToken) &&
+        isPositiveInteger(value.revision)
+      );
     case 'RENDER_DOCUMENT':
       return (
         isBoundedString(value.source, 1_000_000) &&
@@ -231,6 +256,13 @@ export const isPluginToUIMessage = (value: unknown): value is PluginToUIMessage 
     (value.canApply === undefined || typeof value.canApply === 'boolean');
 
   switch (value.type) {
+    case 'PREFERENCES_SAVED':
+    case 'PREFERENCES_ERROR':
+      return (
+        Object.keys(value).length === 3 &&
+        isPositiveInteger(value.workflowToken) &&
+        isPositiveInteger(value.revision)
+      );
     case 'INITIALIZE':
       return (
         (value.source === undefined || isBoundedString(value.source, 1_000_000)) &&

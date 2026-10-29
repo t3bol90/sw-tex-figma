@@ -35,6 +35,10 @@ class Node {
     this.width = width;
     this.height = height;
   }
+  public resizeWithoutConstraints(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
+  }
   public appendChild(node: Node): void {
     this.children.push(node);
   }

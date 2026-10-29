@@ -1,128 +1,234 @@
 * {
   box-sizing: border-box;
 }
-
 body {
   margin: 0;
   color: var(--figma-color-text, #1e1e1e);
   background: var(--figma-color-bg, #fff);
   font:
-    12px/1.4 Inter,
+    12px/1.45 Inter,
     sans-serif;
 }
-
-button {
-  font: inherit;
-}
-
-.app {
-  display: flex;
-  height: 100vh;
-  overflow: auto;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-}
-
 h1,
+h2,
 p {
   margin: 0;
 }
-
+.app {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--figma-color-border, #e1e1e1);
+}
 h1 {
   font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
 }
-
 header p,
-.status {
+.status,
+.source-hint,
+.preferences-status,
+.control-status {
   color: var(--figma-color-text-secondary, #6b6b6b);
 }
-
-label {
-  font-weight: 600;
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 224px;
+  flex: 1;
+  min-height: 0;
 }
-
+.source-pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 18px 12px;
+}
+label,
+h2 {
+  font-size: 12px;
+  font-weight: 550;
+}
 .source-editor {
-  min-height: 180px;
-  overflow: auto;
-  border: 1px solid var(--figma-color-border, #d0d0d0);
-  border-radius: 4px;
-  color: inherit;
-  background: var(--figma-color-bg-secondary, #f5f5f5);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--figma-color-border, #d8d8d8);
+  border-radius: 6px;
+  background: var(--figma-color-bg, #fff);
 }
-
+.source-editor:focus-within {
+  border-color: var(--figma-color-border-selected, #0d99ff);
+}
 .source-editor .cm-editor {
-  min-height: 178px;
+  height: 100%;
   font:
-    12px/1.45 ui-monospace,
+    12px/1.65 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
 }
-
 .source-editor .cm-scroller {
   overflow: auto;
 }
-
 .source-editor .cm-content {
-  padding: 8px;
+  padding: 12px;
 }
-
 .source-editor .cm-editor.cm-focused {
   outline: none;
 }
-
-.status {
-  min-height: 34px;
+.source-hint {
+  font-size: 11px;
 }
-
-footer {
+.settings-pane {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 16px 12px;
+  border-left: 1px solid var(--figma-color-border, #e1e1e1);
+  background: var(--figma-color-bg-secondary, #f7f7f7);
 }
-
-button {
-  border: 1px solid var(--figma-color-border, #d0d0d0);
-  border-radius: 4px;
-  padding: 6px 12px;
-  color: inherit;
-  background: transparent;
-}
-
-button.primary {
-  border-color: var(--figma-color-bg-brand, #18a0fb);
-  color: #fff;
-  background: var(--figma-color-bg-brand, #18a0fb);
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 8px;
+  align-items: start;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 .controls label {
   display: grid;
-  gap: 4px;
-  font-size: 11px;
+  gap: 6px;
+  min-width: 0;
+}
+.width-control {
+  order: 0;
+}
+.alignment-control {
+  order: 1;
+}
+.family-control {
+  order: 2;
+  grid-column: 1 / -1;
+}
+.style-control {
+  order: 3;
+}
+.size-control {
+  order: 4;
+}
+.color-control {
+  order: 5;
+  grid-column: 1 / -1;
 }
 .controls input,
 .controls select {
   width: 100%;
-  padding: 5px;
+  height: 32px;
+  min-width: 0;
+  padding: 0 8px;
   color: inherit;
   background: var(--figma-color-bg, #fff);
-  border: 1px solid var(--figma-color-border, #d0d0d0);
+  border: 1px solid var(--figma-color-border, #d8d8d8);
   border-radius: 4px;
   font: inherit;
-}
-
-.control-status {
-  color: var(--figma-color-text-secondary, #6b6b6b);
   font-weight: 400;
+}
+.controls input[type='color'] {
+  padding: 4px;
+  cursor: pointer;
+}
+.controls input:focus-visible,
+.controls select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--figma-color-border-selected, #0d99ff);
+  outline-offset: 1px;
+}
+.control-status {
+  font-size: 11px;
+  font-weight: 400;
+}
+.preferences-status {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 11px;
+}
+footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--figma-color-border, #e1e1e1);
+}
+.status {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+button {
+  height: 32px;
+  border: 1px solid var(--figma-color-border, #d0d0d0);
+  border-radius: 5px;
+  padding: 0 12px;
+  color: inherit;
+  background: var(--figma-color-bg, #fff);
+  font: inherit;
+  cursor: pointer;
+}
+button.primary {
+  min-width: 78px;
+  border-color: var(--figma-color-bg-brand, #0d99ff);
+  color: var(--figma-color-text-onbrand, #fff);
+  background: var(--figma-color-bg-brand, #0d99ff);
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+@media (max-width: 540px) {
+  header {
+    flex-wrap: wrap;
+    gap: 2px 12px;
+  }
+  .workspace {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .source-pane {
+    flex: 1 0 260px;
+  }
+  .source-editor {
+    min-height: 180px;
+  }
+  .settings-pane {
+    flex-shrink: 0;
+    overflow: visible;
+    border-left: 0;
+    border-top: 1px solid var(--figma-color-border, #e1e1e1);
+  }
+  footer {
+    gap: 10px;
+  }
 }

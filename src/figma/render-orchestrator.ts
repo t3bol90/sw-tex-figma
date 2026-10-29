@@ -34,6 +34,7 @@ export interface FigmaRenderApi extends FigmaDocumentRendererApi {
   flatten?(nodes: readonly FigmaBaselineProbeTextNode[]): FigmaBaselineProbeVectorNode;
   readonly currentPage: { selection: readonly unknown[] | unknown[] };
   readonly viewport: RenderViewport;
+  readonly constructionOrigin?: { readonly x: number; readonly y: number };
 }
 export interface RenderRequest {
   readonly source: string;
@@ -43,6 +44,9 @@ export interface RenderRequest {
   readonly selectedSnapshot?: TextSelectionSnapshot;
   /** Replacement flows defer selection/reveal until the old node is removed. */
   readonly finalizeSelection?: boolean;
+}
+export interface CreationDestination {
+  place(root: FigmaFrameNode): RenderResult['placement'];
 }
 export interface RenderResult {
   readonly root: FigmaFrameNode;
@@ -88,7 +92,10 @@ export class FigmaRenderOrchestrator {
         : undefined;
     this.baselines = new FigmaProseBaselineCalibrator(probe);
   }
-  public async render(request: RenderRequest): Promise<RenderResult> {
+  public async render(
+    request: RenderRequest,
+    destination?: CreationDestination,
+  ): Promise<RenderResult> {
     validateRenderedMathPayloads(request.document, request.math);
     const resolutions = new Map<string, FontResolution | undefined>();
     const keyFor = (marks: readonly string[] | undefined) => marks?.join(',') ?? '';
@@ -141,12 +148,14 @@ export class FigmaRenderOrchestrator {
     });
     const blocks = toRenderBlocks(measured, request.settings);
     const bounds = calculateDocumentBounds(blocks, request.settings);
-    const placement = resolveCreationPlacement(
-      request.selectedSnapshot,
-      this.api.viewport,
-      bounds.width,
-      bounds.height,
-    );
+    let placement = this.api.constructionOrigin
+      ? { ...this.api.constructionOrigin, rotation: 0 }
+      : resolveCreationPlacement(
+          request.selectedSnapshot,
+          this.api.viewport,
+          bounds.width,
+          bounds.height,
+        );
     const created: Array<{ remove(): void }> = [];
     try {
       const root = await renderDocumentLayers(
@@ -160,6 +169,7 @@ export class FigmaRenderOrchestrator {
         },
         (node) => created.push(node),
       );
+      if (destination) placement = destination.place(root);
       // Construction has committed. Viewport/selection are deliberately best effort.
       if (request.finalizeSelection !== false) {
         try {
