@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 
 import type { ParagraphNode } from '../src/shared/document-model';
 import type { RenderedMathPayload, TypographyContext } from '../src/shared/types';

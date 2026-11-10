@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { PluginToUIMessage } from '../src/shared/messages';
 import { readPersistedDocumentState } from '../src/figma/persistence';
 import type { RenderedMathPayload } from '../src/shared/types';
