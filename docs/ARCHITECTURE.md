@@ -38,8 +38,31 @@ identities and workflow targets remain controller-owned.
 
 `src/parser/` uses `remark-parse` and `remark-math`, then converts mdast into
 the small application model in `src/shared/document-model.ts`: paragraphs,
-prose runs with marks, inline math, hard breaks, and display math. The renderer
-walks this model in source order.
+prose runs with marks and links, inline math, hard breaks, display math, and
+rules. Headings are paragraphs with a level whose text is bold. Code blocks are
+paragraphs of `code`-marked runs, one hard-broken line per source line, with
+spaces stored as no-break spaces so indentation survives and lines never wrap.
+List items and block quotes are flattened into blocks in source order; each
+block records its container path, outermost first, and the first block of a list
+item carries its marker (`•`, `◦`, `▪` by depth, or `1.`, `2.`, … from the list
+start). Only `http:`, `https:`, and `mailto:` link targets are kept; other links
+keep their text. Reference definitions render nothing. Raw HTML and images are
+rejected with a positioned parser error. The renderer walks this model in source
+order.
+
+Headings scale the body size (1.5×, 1.3×, and 1.15× for levels 1–3, clamped to
+the measurable maximum) together with absolute line height and letter spacing,
+so their prose and inline math are measured at heading size. `code` marks
+resolve to the body family when it is monospace, otherwise to the first
+installed family from `MONOSPACE_FAMILIES` (Roboto Mono first), keeping weight
+and slant when available; without any monospace family, code uses the body font.
+Each list item indents its content by 1.5em and each block quote by 1em; nested
+blocks wrap within the remaining width and stay left aligned. List markers are
+native text placed before the content on the first baseline. A quote draws one
+bar spanning all of its blocks, and a rule is a 1em-tall block with a centered
+line; both use the text fill at 30% opacity. Linked text is underlined and
+carries a Figma URL hyperlink. Consecutive list blocks use a 0.25em gap instead
+of the 0.5em block gap.
 
 `src/math/` runs bundled MathJax locally and normalizes every result into a
 self-contained SVG plus metrics. Repeated expressions use bounded caches, while

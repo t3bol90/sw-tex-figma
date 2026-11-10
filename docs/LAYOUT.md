@@ -8,7 +8,10 @@ canvas, remark, or MathJax engine APIs.
 ## Public API
 
 - `tokenizeParagraph(paragraph)` emits prose, separator, atomic math, and hard
-  break tokens in source order.
+  break tokens in source order. Prose and separator tokens keep their run's
+  marks and link target; the compositor merges fragments only when both match.
+- `blockTypography(typography, block)` returns a heading's scaled typography,
+  or the body typography unchanged.
 - `measureParagraph` / `measureDocument` invoke `NativeTextMeasurer` for prose
   and validate occurrence-ordered math payloads. A callback can receive marks
   and a host-supplied `FontResolution`; the compositor never invents a bold or

@@ -115,6 +115,7 @@ const mergeAndPlace = (
           type: 'prose',
           text: token.text,
           ...(token.marks === undefined ? {} : { marks: token.marks }),
+          ...(token.link === undefined ? {} : { link: token.link }),
           ...(token.fontResolution === undefined ? {} : { fontResolution: token.fontResolution }),
           x,
           y: top + lineAscent - token.metrics.ascent,
@@ -144,6 +145,7 @@ const proseCompatible = (
 ): boolean =>
   previous.justifyGapAfter !== true &&
   sameMarks(previous.marks, token.marks) &&
+  previous.link === token.link &&
   sameFontResolution(previous.fontResolution, token.fontResolution) &&
   sameVerticalMetrics(previous.metrics, token.metrics) &&
   sameCalibration(previous.baselineCalibration, token.baselineCalibration);

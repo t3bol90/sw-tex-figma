@@ -78,6 +78,7 @@ const prose = (run: TextRun, text: string, sourceRunIndex: number): ProseToken =
   kind: 'prose',
   text,
   ...(run.marks === undefined ? {} : { marks: run.marks }),
+  ...(run.link === undefined ? {} : { link: run.link }),
   sourceRunIndex,
 });
 
@@ -85,5 +86,6 @@ const separator = (run: TextRun, text: string, sourceRunIndex: number): Separato
   kind: 'separator',
   text,
   ...(run.marks === undefined ? {} : { marks: run.marks }),
+  ...(run.link === undefined ? {} : { link: run.link }),
   sourceRunIndex,
 });

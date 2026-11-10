@@ -21,6 +21,9 @@ _Figure 1. Math Text rendering an academic theorem with native Roboto Condensed 
 
 - Native Figma `TextNode` prose with selected family, style, size, color, and width.
 - Local MathJax rendering for inline `$...$` and display `$$...$$` expressions.
+- Markdown structure: headings, bulleted and numbered lists (nested), block quotes, code
+  blocks and inline code in a monospace face, links as native Figma hyperlinks, and
+  horizontal rules.
 - Atomic SVG math with expression-specific ascent, descent, and baseline placement.
 - Markdown source editing with CodeMirror.
 - Left, center, right, and justified paragraph alignment.
@@ -63,6 +66,9 @@ $$
 R \cong \prod_{i=1}^{r} M_{n_i}(D_i).
 $$
 ```
+
+Headings, lists, block quotes, code, links, and horizontal rules can surround the
+math. Raw HTML and images are rejected with the source position of the unsupported node.
 
 Configure the document width, Figma font family and style, font size, text color, and alignment. Then select **Apply**.
 

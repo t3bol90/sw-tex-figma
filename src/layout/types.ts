@@ -1,4 +1,4 @@
-import type { InlineRun, ParagraphNode, TextMark } from '../shared/document-model';
+import type { BlockContainer, InlineRun, ParagraphNode, TextMark } from '../shared/document-model';
 import type { RenderedMathPayload, TextAlignment, TypographyContext } from '../shared/types';
 
 /** A native-text metric callback. It is deliberately independent of Figma. */
@@ -63,6 +63,7 @@ export interface ProseToken {
   readonly kind: 'prose';
   readonly text: string;
   readonly marks?: readonly TextMark[];
+  readonly link?: string;
   readonly sourceRunIndex: number;
 }
 
@@ -71,6 +72,7 @@ export interface SeparatorToken {
   readonly kind: 'separator';
   readonly text: string;
   readonly marks?: readonly TextMark[];
+  readonly link?: string;
   readonly sourceRunIndex: number;
 }
 
@@ -123,6 +125,8 @@ export interface ProseLineChild {
   readonly type: 'prose';
   readonly text: string;
   readonly marks?: readonly TextMark[];
+  /** Hyperlink target; adjacent fragments merge only when their targets match. */
+  readonly link?: string;
   readonly fontResolution?: FontResolution;
   readonly x: number;
   readonly y: number;
@@ -178,6 +182,13 @@ export interface DisplayMathPlan {
   readonly rendered: RenderedMathPayload;
   readonly metrics: LayoutMetrics;
   readonly svgScale: number;
+  readonly containers?: readonly BlockContainer[];
+}
+
+/** A thematic break. Its geometry is owned by the renderer policy. */
+export interface RulePlan {
+  readonly type: 'rule';
+  readonly containers?: readonly BlockContainer[];
 }
 
 /** A paragraph block retains its measured token plan in document source order. */
@@ -187,7 +198,7 @@ export interface MeasuredParagraphBlock {
 }
 
 /** Ordered document blocks for renderer traversal; convenience arrays are secondary. */
-export type MeasuredDocumentBlock = MeasuredParagraphBlock | DisplayMathPlan;
+export type MeasuredDocumentBlock = MeasuredParagraphBlock | DisplayMathPlan | RulePlan;
 
 export interface MeasuredDocument {
   /** Every block in application-AST order, including interleaved display math. */

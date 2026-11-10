@@ -1,6 +1,6 @@
 import type { TextMark } from '../shared/document-model';
 
-const MARK_ORDER: readonly TextMark[] = ['bold', 'italic'];
+const MARK_ORDER: readonly TextMark[] = ['bold', 'italic', 'code'];
 
 /**
  * Marks have one canonical order, regardless of their nesting order in Markdown.
