@@ -2,6 +2,7 @@ import type { MathTextDocument, ParagraphNode, TextMark } from '../shared/docume
 import type { RenderedMathPayload } from '../shared/types';
 
 import { calibrateProseMetrics, DEFAULT_PROSE_BASELINE_CALIBRATION } from './baseline';
+import { blockTypography } from './block-style';
 import { tokenizeParagraph } from './tokenizer';
 import type {
   DisplayMathPlan,
@@ -166,6 +167,7 @@ export async function measureDocument(
       const count = node.children.filter((child) => child.type === 'math').length;
       const measured = await measureParagraph(node, {
         ...options,
+        typography: blockTypography(options.typography, node),
         renderedMath: options.renderedMath.slice(offset, offset + count),
       });
       paragraphs.push(measured);
@@ -173,11 +175,24 @@ export async function measureDocument(
       offset += count;
       continue;
     }
+    if (node.type === 'rule') {
+      blocks.push({
+        type: 'rule',
+        ...(node.containers === undefined ? {} : { containers: node.containers }),
+      });
+      continue;
+    }
     const rendered = options.renderedMath[offset++];
     if (rendered === undefined)
       throw new Error('Validated display math payload unexpectedly disappeared.');
     const scaled = scaleMathPayloadForTypography(rendered, options.typography.fontSize);
-    const plan: DisplayMathPlan = { type: 'display-math', latex: node.latex, rendered, ...scaled };
+    const plan: DisplayMathPlan = {
+      type: 'display-math',
+      latex: node.latex,
+      rendered,
+      ...scaled,
+      ...(node.containers === undefined ? {} : { containers: node.containers }),
+    };
     displayMath.push(plan);
     blocks.push(plan);
   }

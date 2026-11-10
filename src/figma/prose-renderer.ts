@@ -12,6 +12,8 @@ export interface FigmaRenderableTextNode {
   letterSpacing: unknown;
   fills: unknown;
   textAutoResize?: unknown;
+  textDecoration?: unknown;
+  hyperlink?: unknown;
   characters: string;
   readonly width: number;
   readonly height: number;
@@ -45,6 +47,10 @@ export async function renderProse(
   }));
   if ('textAutoResize' in node) node.textAutoResize = 'WIDTH_AND_HEIGHT';
   node.characters = child.text;
+  if (child.link !== undefined) {
+    node.textDecoration = 'UNDERLINE';
+    node.hyperlink = { type: 'URL', value: child.link };
+  }
   if (!finite(node.width) || !finite(node.height))
     throw new Error('Figma returned invalid native text dimensions.');
   node.name = textLayerName(child.text);

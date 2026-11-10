@@ -1,4 +1,5 @@
 import {
+  blockTypography,
   composeMeasuredParagraph,
   measureDocument,
   validateRenderedMathPayloads,
@@ -10,6 +11,7 @@ import type { RenderSettings, RenderedMathPayload } from '../shared/types';
 import type { TextSelectionSnapshot } from './selection';
 import { FigmaFontResolver } from './font-resolution';
 import {
+  blockContentWidth,
   calculateDocumentBounds,
   renderDocumentLayers,
   type FigmaDocumentRendererApi,
@@ -196,15 +198,21 @@ const toRenderBlocks = (
   measured: MeasuredDocument,
   settings: RenderSettings,
 ): readonly RenderBlock[] =>
-  measured.blocks.map((block) =>
-    block.type === 'paragraph'
-      ? {
-          type: 'paragraph',
-          plan: composeMeasuredParagraph(block.measured, {
-            width: settings.width,
-            typography: settings.typography,
-            textAlignment: settings.textAlignment,
-          }),
-        }
-      : { type: 'display-math', plan: block },
-  );
+  measured.blocks.map((block): RenderBlock => {
+    if (block.type === 'rule') return { type: 'rule', plan: block };
+    if (block.type !== 'paragraph') return { type: 'display-math', plan: block };
+    const { heading, code, containers } = block.measured.paragraph;
+    const typography = blockTypography(settings.typography, { heading });
+    return {
+      type: 'paragraph',
+      plan: composeMeasuredParagraph(block.measured, {
+        width: blockContentWidth(settings, containers),
+        typography,
+        textAlignment: settings.textAlignment,
+      }),
+      ...(typography === settings.typography ? {} : { typography }),
+      ...(heading === undefined ? {} : { heading }),
+      ...(code === undefined ? {} : { code }),
+      ...(containers === undefined ? {} : { containers }),
+    };
+  });
