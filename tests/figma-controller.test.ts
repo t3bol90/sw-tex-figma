@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 
 import { createSelectionController } from '../src/figma/controller';
 import type { SelectionSnapshotOutcome } from '../src/figma/selection';

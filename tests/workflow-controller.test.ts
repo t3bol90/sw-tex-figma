@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { createPersistedDocumentState, readPersistedDocumentState } from '../src/figma/persistence';
 import type { GeneratedSceneNode } from '../src/figma/generated-target';
 import {

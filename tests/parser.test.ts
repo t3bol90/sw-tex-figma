@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 
 import type { MathTextDocument } from '../src/shared/document-model';
 import { MarkdownParserError, mdastToDocument, parseMarkdown } from '../src/parser';

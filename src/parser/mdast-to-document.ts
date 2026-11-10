@@ -65,7 +65,12 @@ interface MdastUnsupportedNode extends MdastNode {
 
 type MdastBlockNode = MdastParagraph | MdastMath | MdastUnsupportedNode;
 type MdastInlineNode =
-  MdastText | MdastInlineMath | MdastBreak | MdastStrong | MdastEmphasis | MdastUnsupportedNode;
+  | MdastText
+  | MdastInlineMath
+  | MdastBreak
+  | MdastStrong
+  | MdastEmphasis
+  | MdastUnsupportedNode;
 
 /**
  * Converts an mdast root into the small renderer-independent document model.

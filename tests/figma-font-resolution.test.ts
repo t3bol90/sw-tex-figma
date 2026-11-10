@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { FigmaFontResolver, FontResolutionError } from '../src/figma/font-resolution';
 const typography = {
   fontName: { family: 'Inter', style: 'Regular' },

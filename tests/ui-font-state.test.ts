@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { settingsFromFontStyles } from '../src/ui/App';
 import type { RenderSettings } from '../src/shared/types';
 

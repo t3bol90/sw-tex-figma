@@ -15,7 +15,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
-    "types": ["@figma/plugin-typings", "vitest/globals"]
+    "types": ["@figma/plugin-typings", "vite-plus/test/globals"]
   },
   "include": ["src", "tests", "vite.config.ts"]
 }

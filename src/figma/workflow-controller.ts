@@ -106,7 +106,8 @@ export function createWorkflowController(
   let fontLoad: Promise<void> | undefined;
   /** Retained so an early pre-iframe post can be replayed without refetching. */
   let cachedFontFamilies:
-    Extract<PluginToUIMessage, { type: 'AVAILABLE_FONT_FAMILIES' }> | undefined;
+    | Extract<PluginToUIMessage, { type: 'AVAILABLE_FONT_FAMILIES' }>
+    | undefined;
   let cachedFontInventory: readonly FontDescriptor[] | undefined;
   const postContext = (type: ContextMessage['type'], payload: ContextPayload): void => {
     const message = messageFor(type, payload);
