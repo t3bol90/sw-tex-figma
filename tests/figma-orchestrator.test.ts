@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { FigmaRenderOrchestrator } from '../src/figma/render-orchestrator';
 import { MathJaxSvgRenderer, renderDocumentMath } from '../src/math';
 import { parseMarkdown } from '../src/parser';

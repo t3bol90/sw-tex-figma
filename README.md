@@ -1,7 +1,8 @@
 # Math Text: Markdown and LaTeX Typesetting for Figma
 
-![Code style: Prettier](https://img.shields.io/badge/code%20style-Prettier-F7B93E.svg)
-![Lint: ESLint](https://img.shields.io/badge/lint-ESLint-4B32C3.svg)
+![Toolchain: Vite+](https://img.shields.io/badge/toolchain-Vite%2B-646CFF.svg)
+![Code style: Oxfmt](https://img.shields.io/badge/code%20style-Oxfmt-32F3E9.svg)
+![Lint: Oxlint](https://img.shields.io/badge/lint-Oxlint-32F3E9.svg)
 ![Tests: Vitest](https://img.shields.io/badge/tests-Vitest-6E9F18.svg)
 
 **Community plugin:** [Math Text on Figma Community](https://www.figma.com/community/plugin/1673896435619981207)

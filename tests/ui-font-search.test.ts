@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { filterFontFamilies } from '../src/ui/App';
 
 describe('font family search state', () => {

@@ -111,7 +111,10 @@ export interface MeasuredMathToken extends MathToken {
 }
 
 export type MeasuredInlineToken =
-  MeasuredProseToken | MeasuredSeparatorToken | MeasuredMathToken | HardBreakToken;
+  | MeasuredProseToken
+  | MeasuredSeparatorToken
+  | MeasuredMathToken
+  | HardBreakToken;
 
 export interface MeasuredParagraph {
   readonly paragraph: ParagraphNode;

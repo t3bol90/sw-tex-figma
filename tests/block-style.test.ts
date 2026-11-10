@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 
 import { blockTypography, HEADING_SCALE } from '../src/layout';
 import type { TypographyContext } from '../src/shared/types';
